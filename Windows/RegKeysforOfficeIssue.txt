@@ -1,0 +1,23 @@
+Windows Sever 2022:
+
+reg add HKEY_LOCAL_MACHINESYSTEMCurrentControlSetPoliciesMicrosoftFeatureManagementOverrides /v 2801335948 /t REG_DWORD /d 0 /f
+
+ 
+
+Windows 10, version 2004, Windows 10, version 20H2 and Windows 10, version 21H1:
+
+reg add HKEY_LOCAL_MACHINESYSTEMCurrentControlSetPoliciesMicrosoftFeatureManagementOverrides /v 2767781516 /t REG_DWORD /d 0 /f
+
+ 
+
+Windows 10, version 1909:
+
+reg add HKEY_LOCAL_MACHINESYSTEMCurrentControlSetPoliciesMicrosoftFeatureManagementOverrides /v 928713355 /t REG_DWORD /d 0 /f
+
+ 
+
+Windows 10, version 1809, Windows Server 2019:
+
+reg add HKEY_LOCAL_MACHINESYSTEMCurrentControlSetPoliciesMicrosoftFeatureManagementOverrides /v 2371422858 /t REG_DWORD /d 0 /f
+
+ 

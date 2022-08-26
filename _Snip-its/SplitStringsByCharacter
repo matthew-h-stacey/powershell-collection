@@ -1,0 +1,1 @@
+$d.PrimarySmtpAddress.Split("@")[0] + "@" + $domain

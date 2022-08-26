@@ -1,0 +1,10 @@
+# Check if already connected to ExchangeOnline, connect if not connected
+$isConnected = Get-PSSession | Where-Object { $_.Name -like "ExchangeOnlineInternalSession*" -and $_.Availability -like "Available" }
+while ( $null -eq $isConnected ) { # while loop to connect to EXO
+    Write-Host "[MODULE] Connecting to ExchangeOnline ..."
+    Connect-ExchangeOnline -CertificateThumbprint $certThumbprint -AppId $clientID -Organization $domain -ShowBanner:$false
+    $isConnected = Get-PSSession | Where-Object { $_.Name -like "ExchangeOnlineInternalSession*" -and $_.Availability -like "Available" }
+    if ( $null -ne $isConnected ) {
+        Write-Output "[MODULE] Connected to ExchangeOnline"
+    }
+}   

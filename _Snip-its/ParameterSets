@@ -1,0 +1,8 @@
+# Can only use Var1 and Var, OR Var3 and Var4
+
+param (
+    [parameter(ParameterSetName = "setA")][String]$Var1,
+    [parameter(ParameterSetName = "setA")][String]$Var2,
+    [parameter(ParameterSetName = "setB")][String]$Var3,
+    [parameter(ParameterSetName = "setB")][String]$Var4
+)

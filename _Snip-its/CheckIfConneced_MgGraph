@@ -1,0 +1,10 @@
+# Connect to MgGraph, if not already connected
+    $isConnected = Get-MgContext
+    while ( $null -eq $isConnected ) { # while loop to connect to MsGraph
+        Write-Host "[MODULE] Connecting to MgGraph ..."
+        Connect-MgGraph -TenantId $tenantID -ClientID $clientID -CertificateThumbprint $certThumbprint | Out-Null
+        $isConnected = Get-MgContext
+        if ( $null -ne $isConnected) { # if connected
+            Write-Output "[MODULE] Connected to MgGraph"
+        }
+    }

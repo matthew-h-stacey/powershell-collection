@@ -1,0 +1,5 @@
+Select-Object @{Name=Custom;Expression={<Custom Expression Here>}}
+
+Select Object DisplayName,@{
+    Name = "MfaStatus"; Expression =
+}

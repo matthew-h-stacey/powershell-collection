@@ -1,0 +1,44 @@
+﻿<Window x:Class="GUI_Test.AAD User Offboarder"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:GUI_Test"
+        mc:Ignorable="d"
+        Title="AAD User Offboarder" Height="400" Width="480" ResizeMode="NoResize" WindowStartupLocation="CenterScreen" VerticalAlignment="Top">
+    <Grid x:Name="mainWindow" ScrollViewer.VerticalScrollBarVisibility="Disabled" MaxWidth="450" MaxHeight="400
+          " Width="480" VerticalAlignment="Top" Height="400">
+        <Label x:Name="labelEnterUPN" Content="Enter the UserPrincipalName of the user to offboard:" HorizontalAlignment="Left" Margin="19,10,0,0" VerticalAlignment="Top" FontWeight="Bold"/>
+        <Button x:Name="buttonGo" Content="Go" HorizontalAlignment="Left" Margin="212,334,0,0" VerticalAlignment="Top" Width="26" Height="19"/>
+        <Label x:Name="labelUPN" Content="UserPrincipalName" HorizontalAlignment="Left" Margin="39,36,0,0" VerticalAlignment="Top"/>
+        <TextBox x:Name="txtboxUPN" HorizontalAlignment="Left" Margin="155,41,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="200"/>
+        <StackPanel x:Name="spMailboxDelegate" Margin="40,91,0,0" HorizontalAlignment="Left" VerticalAlignment="Top">
+            <RadioButton x:Name="buttonMailboxDelegate_No" Content="No" HorizontalAlignment="Center" VerticalAlignment="Center" IsChecked="True"/>
+            <RadioButton x:Name="buttonMailboxDelegate_Yes" Content="Yes" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </StackPanel>
+        <StackPanel x:Name="spOneDrive" Margin="40,149,0,0" HorizontalAlignment="Left" VerticalAlignment="Top">
+            <RadioButton x:Name="buttonOneDrive_No" Content="No" HorizontalAlignment="Center" VerticalAlignment="Center" IsChecked="True"/>
+            <RadioButton x:Name="buttonOneDrive_Yes" Content="Yes" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </StackPanel>
+        <StackPanel x:Name="spFwEmail" Margin="40,206,0,0" HorizontalAlignment="Left" VerticalAlignment="Top">
+            <RadioButton x:Name="buttonFwEmail_No" Content="No" HorizontalAlignment="Center" VerticalAlignment="Center" IsChecked="True"/>
+            <RadioButton x:Name="buttonFwEmail_Yes" Content="Yes" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </StackPanel>
+        <Label x:Name="labelMailboxDelegate" Content="Grant another user access to mailbox? (+ optional Calendar/Contacts?)" HorizontalAlignment="Left" Margin="19,65,0,0" VerticalAlignment="Top"/>
+        <Label x:Name="labelOneDriveAccess" Content="Grant another user access to OneDrive files?" HorizontalAlignment="Left" Margin="19,124,0,0" VerticalAlignment="Top"/>
+        <Label x:Name="labelFwEmail" Content="Forward email to another recipient?" HorizontalAlignment="Left" Margin="19,182,0,0" VerticalAlignment="Top"/>
+        <Label x:Name="labelMailboxDelegateWho" Content="Who?" HorizontalAlignment="Left" Margin="99,102,0,0" VerticalAlignment="Top" Visibility="Hidden"/>
+        <Label x:Name="labelOneDriveAccessWho" Content="Who?" HorizontalAlignment="Left" Margin="99,158,0,0" VerticalAlignment="Top" Visibility="Hidden"/>
+        <Label x:Name="labelFwEmailWho" Content="Who?" HorizontalAlignment="Left" Margin="99,215,0,0" VerticalAlignment="Top" Visibility="Hidden"/>
+        <TextBox x:Name="txtboxMailboxDelegate" HorizontalAlignment="Left" Margin="155,106,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="200" Visibility="Hidden"/>
+        <TextBox x:Name="txtboxOneDriveAccess" HorizontalAlignment="Left" Margin="155,163,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="200" Visibility="Hidden"/>
+        <TextBox x:Name="txtboxFwEmail" HorizontalAlignment="Left" Margin="155,220,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="200" Visibility="Hidden"/>
+        <CheckBox x:Name="chkboxCalendarAccess" Content="Calendar access?" HorizontalAlignment="Left" Margin="216,88,0,0" VerticalAlignment="Top" Visibility="Hidden" Width="111"/>
+        <CheckBox x:Name="chkboxContactAccess" Content="Contact access?" HorizontalAlignment="Left" Margin="331,88,0,0" VerticalAlignment="Top" Visibility="Hidden"/>
+        <CheckBox x:Name="chkboxAutomapInbox" Content="Automap mailbox?" HorizontalAlignment="Left" Margin="89,88,0,0" VerticalAlignment="Top" Visibility="Hidden" IsChecked="True"/>
+        <Label x:Name="labelOtherOptions" Content="Other options:" HorizontalAlignment="Left" Margin="19,239,0,0" VerticalAlignment="Top"/>
+        <CheckBox x:Name="chkboxRemoveLicenses" Content="Remove licenses?" HorizontalAlignment="Left" Margin="40,266,0,0" VerticalAlignment="Top" IsChecked="True"/>
+
+
+    </Grid>
+</Window>
