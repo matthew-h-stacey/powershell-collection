@@ -4,9 +4,9 @@ Objective: Get a report of all distribution group membership
 
 # 1) Regular DistributionGroup export
 $workDir = "C:\TempPath"
-$distiList = "$workDir\Report_Distis_List.csv"
-$distiMembership = "$workDir\Report_Distis_Membership.csv"
-$365GroupList = "$workDir\Report_365Group_List.csv"
+$distiList = "$workDir\Report_Distis_List.csv" # List of all Distis
+$distiMembership = "$workDir\Report_Distis_Membership.csv" # Membership of all Distis
+$365GroupList = "$workDir\Report_365Group_List.csv" # List of all M365 Groups
 
 
 $allDistis = Get-DistributionGroup -ResultSize Unlimited | sort DisplayName
