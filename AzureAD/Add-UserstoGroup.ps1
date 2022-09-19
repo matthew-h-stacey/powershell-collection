@@ -1,3 +1,5 @@
+# Objective: Bulk add users to an AzureAD group
+
 Param
 (
     [Parameter(Mandatory=$true)][String]$GroupName, # displayName of the group to add users to
