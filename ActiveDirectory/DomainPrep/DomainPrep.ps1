@@ -56,7 +56,7 @@ Write-Host "Attempting to create $ouName in $ouPath"
 ###
 
 CreateOU $getDomain $getCurrentDomainRoot
-CreateOU "Computers" (Get-ADOrganizationalUnit -Filter {Name -like $getDomain}| ForEach-Object-Object {$_.DistinguishedName})
+CreateOU "Computers" (Get-ADOrganizationalUnit -Filter {Name -like $getDomain}| ForEach-Object {$_.DistinguishedName})
 CreateOU "Users" (Get-ADOrganizationalUnit -Filter {Name -like $getDomain}| ForEach-Object {$_.DistinguishedName})
 CreateOU "Security Groups" (Get-ADOrganizationalUnit -Filter {Name -like $getDomain}| ForEach-Object {$_.DistinguishedName})
 CreateOU "Disabled" $getCurrentDomainRoot
