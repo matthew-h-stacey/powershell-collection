@@ -5,6 +5,7 @@ Param
     [Parameter(Mandatory = $true)] [string] $GraphAppSecret, # Secret of the Azure App registration
     [Parameter(Mandatory = $true)] [string] $AzureTenantDomain, # Primary domain for the Azure tenant
     [Parameter()] [switch] $EnabledOnly, # Only report on enabled users
+    [Parameter()] [switch] $Teams, # Pull Teams data
     [parameter(ParameterSetName = "identityA")] [string] $Group, # Group to run the report
     [parameter(ParameterSetName = "identityB")] [string] $User # User to run report on
 
@@ -28,14 +29,17 @@ function Install-RequiredModules {
     else { 
         Write-Host "[MODULE] AzureAD/AzureADPreview is installed, continuing ..." 
     }
-    if ($null -eq (Get-Module -ListAvailable -Name MicrosoftTeams)) {
-        Write-Host "[MODULE] Required module MicrosoftTeams is not installed"
-        Write-Host "[MODULE] Installing MicrosoftTeams" -ForegroundColor Cyan
-        Install-Module MicrosoftTeams -Repository PSGallery -AllowClobber -Force -Scope CurrentUser
-    } 
-    else {
-        Write-Host "[MODULE] MicrosoftTeams is installed, continuing ..."
-    }
+
+    if ($Teams){    
+        if ($null -eq (Get-Module -ListAvailable -Name MicrosoftTeams)) {
+            Write-Host "[MODULE] Required module MicrosoftTeams is not installed"
+            Write-Host "[MODULE] Installing MicrosoftTeams" -ForegroundColor Cyan
+            Install-Module MicrosoftTeams -Repository PSGallery -AllowClobber -Force -Scope CurrentUser
+        } 
+        else {
+            Write-Host "[MODULE] MicrosoftTeams is installed, continuing ..."
+        }
+}
 
 }
 
@@ -64,8 +68,10 @@ function Connect-Modules {
         Connect-AzureAD | Out-Null
     }
     # MicrosoftTeams - Connect
-    Write-Host "[MODULE] Connecting to MicrosoftTeams, check for a pop-up authentication window"
-    Connect-MicrosoftTeams  | Out-Null
+    if ($Teams) { 
+        Write-Host "[MODULE] Connecting to MicrosoftTeams, check for a pop-up authentication window"
+        Connect-MicrosoftTeams  | Out-Null
+    }
 }
 
 Install-RequiredModules
@@ -143,11 +149,13 @@ foreach ($u in $feed) {
         $InactiveDays = "N/A"
     }
     
-    try {
-        $teamsNumber = $allTeamsNumbers | Where-Object { $_.UserPrincipalName -like $UPN } | Select-Object -ExpandProperty LineURI
-    }
-    catch {
-        Write-Log "No Teams number found for $UPN"
+    if ( $Teams ) {
+        try {
+            $teamsNumber = $allTeamsNumbers | Where-Object { $_.UserPrincipalName -like $UPN } | Select-Object -ExpandProperty LineURI
+        }
+        catch {
+            Write-Log "No Teams number found for $UPN"
+        }
     }
     
     # Compile user data into a PSCustomObject for exporting to CSV

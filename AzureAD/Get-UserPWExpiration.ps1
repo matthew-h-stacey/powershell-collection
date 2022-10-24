@@ -1,7 +1,8 @@
 # Example: 1 user
 
-$domain = "contoso.com"
-$user = "jsmith@contoso.com"
+
+$domain = "5r86fn.onmicrosoft.com"
+$user = "PattiF@5r86fn.onmicrosoft.com"
 
 connect-msolservice
 
