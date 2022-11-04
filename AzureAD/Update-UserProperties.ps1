@@ -15,11 +15,12 @@ foreach ( $user in $userList) {
     <#  $userExport properties from old run 
         JobTitle                =       $userObject.JobTitle
         Manager                 =       (Get-AzureADUserManager -ObjectId $userObject.UserPrincipalName).UserPrincipalName
-        Department              =       $userObject.Department
-        #>
+        Department              =       $userObject.Department    
+    #>
 
     $userExport = [PSCustomObject]@{
         UserPrincipalName       = $userObject.UserPrincipalName
+        Department       = $userObject.Department
         Office                  = $userObject.Office
         StreetAddress           = $userObject.StreetAddress
         City                    = $userObject.City
