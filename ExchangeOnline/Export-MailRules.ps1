@@ -24,11 +24,10 @@ function New-Folder {
 New-Folder $folderPath
 
 ### Retrieve all rules for the mailbox, recursively output them to the folder above
-# Replace entries to prevent issue with outputting rules that have invalid characters
+# Replace invalid characters in rule names where applicable
 $userRules = Get-InboxRule -Mailbox $Mailbox -IncludeHidden
 foreach ($r in $userRules){
     $file = "$folderPath\" + ($r.Name.Split([IO.Path]::GetInvalidFileNameChars()) -join '_') + ".txt"
-    # $file = "$folderPath\" + ($r.Name).Replace("/", " ").Replace('(', "").Replace(')', "").Replace(":", "") + ".txt"
     $r | Select-Object * | Out-File $file
 }
 Write-Host "Exported rules to: $folderPath"
