@@ -1,7 +1,7 @@
 # Creates an RSA 4096-bit self-signed certificate with the naming format {UserName}-{HostName}
 
 $workDir = "C:\TempPath" # Output of public key
-$certName = [System.Environment]::UserName + "-" + [System.Environment]::MachineName
+$certName = [System.Environment]::UserName + "_" + [System.Environment]::MachineName
 
 # Create certificate
 $mycert = New-SelfSignedCertificate -DnsName $certName -CertStoreLocation "cert:\CurrentUser\My" -NotAfter (Get-Date).AddYears(3) -KeySpec KeyExchange -KeyLength 4096 -KeyExportPolicy NonExportable
