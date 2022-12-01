@@ -82,6 +82,8 @@ function Connect-Modules {
         Write-Host "[MODULE] Connecting to MicrosoftTeams, check for a pop-up authentication window"
         Connect-MicrosoftTeams  | Out-Null
     }
+
+    Connect-ExchangeOnline -ShowBanner:$False
 }
 
 Function Write-Log {
@@ -91,7 +93,7 @@ Function Write-Log {
 
 
 Install-RequiredModules
-Connect-Modules
+# Connect-Modules
 
 # Report and log file names that will export to the path above
 $reportFile = $exportPath + "\" + $ClientName + "_User_Report_$((Get-Date -Format "MM-dd-yyyy_HHmm")).csv" # Ex: Contoso_User_Report_11-24-2021_14:53.csv
@@ -176,6 +178,18 @@ foreach ($u in $feed) {
     }
     
     # Compile user data into a PSCustomObject for exporting to CSV
+
+    try {
+        $mailbox = Get-Mailbox -Identity $u.Mail -erroraction stop -warningaction stop
+    }
+    catch {
+        Write-Log "Failed to retrieve mailbox for $($UPN)"
+    }
+    $TotalItemSize = [string]($mailbox | Get-EXOMailboxStatistics).TotalItemSize.Value
+    $prohibitSendSize = Get-Mailbox -Identity $mailbox.DisplayName | select -ExpandProperty ProhibitSendQuota
+    $ProhibitSendQuota = [string]$prohibitSendSize
+
+
     $userExport = [PSCustomObject]@{
         DisplayName         = $AADUser.DisplayName
         Mail                = $AADUser.Mail
@@ -189,8 +203,11 @@ foreach ($u in $feed) {
         StreetAddress       = $AADUser.StreetAddress
         City                 = $AADUser.City
         PhoneNumber          = $AADUser.TelephoneNumber
-        TeamsNumber          = $teamsNumber          
+        TeamsNumber         = $teamsNumber
+        TotalItemSize       = $TotalItemSize.Split("(")[0] 
+        ProhibitSendQuota   = $ProhibitSendQuota.Split("(")[0]  
     }
+
     $results += $userExport
 }
 # Export user results
