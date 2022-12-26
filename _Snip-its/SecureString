@@ -1,0 +1,23 @@
+# Notes for creating and using a SecureString in a script instead of plain text credentials
+# Relies on Windows DAPI. Only works under the user account that the SecureString was created as
+
+# < PRE-SCRIPT WORK, START >
+ 
+# Create a secure string using password as input
+$password = Read-Host "Enter password" -AsSecureString
+# Convert the secure string to an encrypted standard string
+$encryptedSS = ConvertFrom-SecureString -SecureString $password
+$encryptedSS # output the encrypted string to console to use it as the input for the ConvertTo-SecureString object
+
+# < PRE-SCRIPT WORK, END >
+
+# < SCRIPT, START >
+
+# Example, pretending the long string output of $encrypyptedSS is as shown below, create $securePassword to use in your script with that input
+$username = "\CONTOSO\svcaccount"
+$securePassword = ConvertTo-SecureString "01000000d08c9ddf0115d1118c7a00c04fc297eb0100000010a572af45655b4da94d6f5e58edb2c60000000002000000000010660000000100002000000038d428a30e8e1277bd2303ebef9bd40e22539ca66d3cec72dfbdf01348330c21000000000e80000000020000200000002b3a49dae877c68215ada6f147dd5eb98e7fa389b3ce9470c14bb654ee823bed4000000092d67f58ac8656957058cccdf05cadfc7c2e69a5344a62267808288015c5f66ef4f61692aab75aa751040b6bd1f2677def84bb70b81b4d96c2ba7f5446ebbdcb40000000ac85f2ee157308c8cdbbee2c8ef563b7527acf94fa5d43d4933f1368c42aecd47e709dd88c352edd8d0e930cc336c4c54e55d61e34f8bafe51185378eb5aedc2"
+$creds = New-Object System.Management.Automation.PSCredential -ArgumentList $username, $securePassword
+New-PSDrive -Name "Reports" -PSProvider "FileSystem" -Root "\\FILE01\IT\Reports" -Credential $creds
+Do-Stuff
+
+# < SCRIPT, END >
