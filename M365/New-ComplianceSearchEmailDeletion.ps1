@@ -70,6 +70,6 @@ Start-Sleep -Seconds 60 # Wait at least 60 seconds before starting to check
 Request-ComplianceSearchStatus
 
 # Issue a Soft Delete of the emails the search finds
-# Remove-ComplianceSearchEmails
+Remove-ComplianceSearchEmails
 
 

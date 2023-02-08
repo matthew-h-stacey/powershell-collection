@@ -1,9 +1,13 @@
+param(
+    # Parameter help description
+    [Parameter(Mandatory = $true)][ParameterType]$UserIdentifier # This variable should equate to the Header in the CSV file that is used as the user Identifier (ex: DisplayName, UserPrincipalName) - i.e, NOT a property to be changed
+)
+
 # NOTE: To keep this code simple, make sure the headers of the CSV match the user object attribute in Active Directory
 
 # Establish variables
 $directory = "C:\TempPath"
-$users = Import-Csv $directory\PV_users.csv
-$userIdentifier = "DisplayName" # This variable should equate to the Header in the CSV file that is used as the user Identifier (ex: DisplayName, UserPrincipalName) - i.e, NOT a property to be changed
+$users = Import-Csv $directory\users.csv
 
 # User properties to retrieve and back up, then to change based on the input of the CSV file
 $userProps = $users | Get-Member | Where-Object { $_.MemberType -eq "NoteProperty" } | Select-Object -ExpandProperty Name
@@ -15,15 +19,20 @@ $results = @()
 foreach ( $u in $users) {
 
     # Get user by DisplayName
-    if ( $userIdentifier -eq "DisplayName") {
+    if ( $UserIdentifier -eq "DisplayName") {
         $userDisplayName = $u.DisplayName
         $adUser = Get-ADUser -Filter { DisplayName -like $userDisplayName } -Properties $userProps
     }
 
     # OR, get user by UPN
-    if ( $userIdentifier -eq "UserPrincipalName") {
+    if ( $UserIdentifier -eq "UserPrincipalName") {
         $UPN = $u.UserPrincipalName
         $adUser = Get-ADUser -Filter { UserPrincipalName -eq $UPN } -Properties $userProps
+    }
+
+    if ( $UserIdentifier -eq "mail") {
+        $mail = $u.mail
+        $adUser = Get-ADUser -Filter { UserPrincipalName -eq $mail } -Properties $userProps
     }
 
     if (!$adUser) {
@@ -47,13 +56,13 @@ $results | Export-Csv $directory\users_backup_$((Get-Date -Format "MM-dd-yyyy_HH
 foreach ($u in $users) {
 
     # Get user by DisplayName
-    if ( $userIdentifier -eq "DisplayName") {
+    if ( $UserIdentifier -eq "DisplayName") {
         $userDisplayName = $u.DisplayName
         $adUser = Get-ADUser -Filter { DisplayName -like $userDisplayName }
     }
 
     # OR, get user by UPN
-    if ( $userIdentifier -eq "UserPrincipalName") {
+    if ( $UserIdentifier -eq "UserPrincipalName") {
         $UPN = $u.UserPrincipalName
         $adUser = Get-ADUser -Filter { UserPrincipalName -eq $UPN }
     }

@@ -1,0 +1,11 @@
+param(
+    [Parameter(Mandatory=$true, ParameterSetName="Set1")]
+    [ValidateSet("Option1", "Option2", "Option3")]
+    [string]$Param
+)
+
+Function DoSomething([string]$Param) {
+    Write-Host "Param: $Param"
+}
+
+DoSomething $Param

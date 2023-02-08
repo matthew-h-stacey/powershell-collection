@@ -423,7 +423,7 @@ Set-MsolUser -UserPrincipalName $UserPrincipalName -PostalCode "$null"
 Set-MsolUser -UserPrincipalName $UserPrincipalName -Office "$null"
 Set-MsolUser -UserPrincipalName $UserPrincipalName -PhoneNumber "$null"
 Set-MsolUser -UserPrincipalName $UserPrincipalName -MobilePhone "$null"
-Set-MsolUser -UserPrincipalName $UserPrincipalName -AlternateEmailAddresses "$null"
+Set-MsolUser -UserPrincipalName $UserPrincipalName -AlternateEmailAddresses @()
 Set-MsolUser -UserPrincipalName $UserPrincipalName -ImmutableId "$null"
 
 Write-Log "[MSONLINE] Cleared the following properties from user: AlternateEmailAddresses, City, Department, Manager, MobilePhone, Office, PhoneNumber, State, StreetAddress, Zip"
