@@ -29,7 +29,7 @@ if ($Random.IsPresent) {
     $pwLength = 32
     $pw = Get-RandomPassword($pwLength)
     if ($pw.Length -ge $pwLength) { # verify random password was generated successfully
-        Write-Output "[AAD] Setting a $($pwLength)-character randomly password on user $($UserPrincipalName)"
+        Write-Output "[AAD] Setting a $($pwLength)-character randomly generated password on user $($UserPrincipalName)"
         Set-AzureADUserPassword -ObjectId $UserPrincipalName -Password (ConvertTo-SecureString "$pw" -AsPlainText -Force)
     }   
     else { Write-Output "[ERROR] Issue occured during random password generation. Please try again" }

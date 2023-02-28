@@ -1,0 +1,14 @@
+$clientID = "4d4a4711-e4b2-44b7-8c93-bd45ebd6a364"
+$tenantID = "444a999d-a691-44e1-b92d-67f7533e8d03"
+
+Import-Module -Name MSAL.PS -Force
+$certName = [System.Environment]::UserName + "-" + [system.environment]::MachineName
+$certThumbprint = Get-ChildItem Cert:\CurrentUser\My\ | Where-Object { $_.Subject -like "*$certName*" } | Select-Object -ExpandProperty Thumbprint
+$ClientCertificate = Get-Item "Cert:\CurrentUser\My\$($certThumbprint)"
+$myAccessToken = Get-MsalToken -ClientId $clientID -TenantId $tenantID -ClientCertificate $ClientCertificate
+
+
+
+Invoke-RestMethod -Headers @{Authorization = "Bearer $($myAccessToken.AccessToken)" } `
+                -Uri "https://graph.microsoft.com/beta/reports/getMailboxUsageDetail(period='D7')" `
+                -Method Get)

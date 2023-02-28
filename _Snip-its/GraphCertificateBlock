@@ -1,0 +1,7 @@
+Import-Module MSAL.PS
+$certName = [System.Environment]::UserName + "-" + [system.environment]::MachineName
+$certThumbprint = Get-ChildItem Cert:\CurrentUser\My\ | Where-Object { $_.Subject -like "*$certName*" } | Select-Object -ExpandProperty Thumbprint
+$ClientCertificate = Get-Item "Cert:\CurrentUser\My\$($certThumbprint)"
+$myAccessToken = Get-MsalToken -ClientId $clientID -TenantId $tenantID -ClientCertificate $ClientCertificate
+
+
