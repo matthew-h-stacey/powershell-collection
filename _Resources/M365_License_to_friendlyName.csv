@@ -1,4 +1,4 @@
-Product_Display_Name,String_ Id,GUID,Service_Plan_Name,Service_Plan_Id,Service_Plans_Included_Friendly_Names
+DisplayName,String_ Id,GUID,SKUPartNumber,Service_Plan_Id,Service_Plans_Included_Friendly_Names
 Advanced Communications,ADV_COMMS,e4654015-5daf-4a48-9b37-4f309dddd88b,TEAMS_ADVCOMMS,604ec28a-ae18-4bc6-91b0-11da94504ba9,Microsoft 365 Advanced Communications
 AI Builder Capacity add-on,CDSAICAPACITY,d2dea78b-507c-4e56-b400-39447f4738f8,CDSAICAPACITY,a7c70a41-5e02-4271-93e6-d9b4184d83f5,AI Builder capacity add-on
 AI Builder Capacity add-on,CDSAICAPACITY,d2dea78b-507c-4e56-b400-39447f4738f8,EXCHANGE_S_FOUNDATION,113feb6c-3fe4-4440-bddc-54d774bf0318,Exchange Foundation
