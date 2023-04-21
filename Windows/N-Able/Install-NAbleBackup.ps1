@@ -1,4 +1,4 @@
-﻿
+
 <# ----- About: ----
     # Deploy N-able Backup Manager
     # Revision v21 - 2021-08-10
@@ -164,13 +164,35 @@
         Write-Output $global:OutputString
         }
 
-    Function Download-BackupManager {
-        "  Downloading Backup Manager"
-        # Enforce TLS1.2
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        # Download installer over TLS1.2
-        (New-Object System.Net.WebClient).DownloadFile("https://cdn.cloudbackup.management/maxdownloads/mxb-windows-x86_x64.exe","c:\windows\temp\mxb-windows-x86_x64.exe")
-    }
+        Function Download-BackupManager {
+            $OSVersion = [System.Environment]::OSVersion.Version
+            if ( $OSVersion.Major -gt 6 ) {
+                # Enforce TLS1.2
+                try {
+                    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                }
+                catch {
+                    Write-Output "An error occured while attempting to enforce TLS"
+                    Write-Output $_
+                }
+                
+                # Download installer over TLS1.2
+                Write-Output "Downloading BackupManager over HTTPS to: c:\windows\temp\mxb-windows-x86_x64.exe"
+                (New-Object System.Net.WebClient).DownloadFile("https://cdn.cloudbackup.management/maxdownloads/mxb-windows-x86_x64.exe","c:\windows\temp\mxb-windows-x86_x64.exe")
+            }
+            else {
+                Write-Output "Downloading BackupManager over HTTP to: c:\windows\temp\mxb-windows-x86_x64.exe"
+                (New-Object System.Net.WebClient).DownloadFile("http://cdn.cloudbackup.management/maxdownloads/mxb-windows-x86_x64.exe","c:\windows\temp\mxb-windows-x86_x64.exe")
+            }
+            try {
+                Get-Item "c:\windows\temp\mxb-windows-x86_x64.exe" | Out-Null
+                Write-Output "Download succeeded. Continuing"
+            }
+            catch {       
+                Write-Output "File failed to download. Exiting"
+                break
+            }
+        }
 
     Function Autodeploy-Passphrase {
 
@@ -215,7 +237,7 @@
                 Write-Progress -Activity "N-able Backup Manager $DeployType" -PercentComplete $i -Status "Installing"
                 Start-Sleep -Milliseconds 100
                 if ($process.HasExited) {
-                    Write-Progress -Activity "Installer" -Completed
+                    Write-Progress -Activity "Installer" -Completed -Status "Done"
                     Break
                 }
             }
@@ -269,7 +291,7 @@
                 Write-Progress -Activity "N-able Backup Manager $DeployType" -PercentComplete $i -Status "Installing"
                 Start-Sleep -Milliseconds 100
                 if ($process.HasExited) {
-                    Write-Progress -Activity "Installer" -Completed
+                    Write-Progress -Activity "Installer" -Completed -Status "Done'"
                     Break
                 }
             }
@@ -323,7 +345,7 @@
             Write-Progress -Activity "N-able Backup Manager $DeployType" -PercentComplete $i -Status "Installing"
             Start-Sleep -Milliseconds 100
             if ($process.HasExited) {
-                Write-Progress -Activity "Installer" -Completed
+                Write-Progress -Activity "Installer" -Completed -Status "Done"
                 Break
             }
         }
@@ -376,7 +398,7 @@
                 Write-Progress -Activity "N-able Backup Manager $DeployType" -PercentComplete $i -Status "Installing"
                 Start-Sleep -Milliseconds 100
                 if ($process.HasExited) {
-                    Write-Progress -Activity "Installer" -Completed
+                    Write-Progress -Activity "Installer" -Completed -Status "Done"
                     Break
                 }
             }           
@@ -416,7 +438,7 @@
                 Write-Progress -Activity "N-able Backup Manager $DeployType" -PercentComplete $i -Status "Uninstalling"
                 Start-Sleep -Milliseconds 100
                 if ($process.HasExited) {
-                    Write-Progress -Activity "Installer" -Completed
+                    Write-Progress -Activity "Installer" -Completed -Status "Done"
                     Break
                 }
             }               
