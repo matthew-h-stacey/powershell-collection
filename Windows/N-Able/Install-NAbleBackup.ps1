@@ -125,6 +125,8 @@
         [parameter(ParameterSetName="AutoDeploy")][switch]$SetBandwidth,  ## Set a Default Bandwidth Throttle
 
         [parameter(ParameterSetName="AutoDeploy")][switch]$SetArchive  ## Set a Default Archive Schedule            
+
+        [Parameter(Mandatory=$false)][Switch]$Hidden # if set, hide Cove from the start menu
     )
 
     clear-host
@@ -711,6 +713,8 @@
                    Get-Command $PSCommandPath -Syntax  
                 }
         }
+
+        
 
 
     
