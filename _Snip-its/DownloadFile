@@ -1,0 +1,6 @@
+$Url = "https://tech.bcservice.net/LabTech/Deployment.aspx?InstallerToken=f79667ce1ddc4a2e868fc80fd7370c1c"
+$LocalPath = "C:\TempPath"
+$FileName = "Automate.msi"
+
+$FilePath = "$LocalPath\$FileName"
+(New-Object System.Net.WebClient).DownloadFile($Url,$FilePath)
