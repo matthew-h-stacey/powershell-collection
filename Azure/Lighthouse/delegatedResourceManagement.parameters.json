@@ -1,0 +1,24 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "mspOfferName": {
+            "value": "BCS365 Azure Lighthouse"
+        },
+        "mspOfferDescription": {
+            "value": "Azure Lighthouse"
+        },
+        "managedByTenantId": {
+            "value": "296011fb-a57d-42be-a1bb-ff2c402079be"
+        },
+        "authorizations": {
+            "value": [
+               { 
+                    "principalId": "888581a1-6b74-4a5a-8ac7-6178340c97c8", 
+                    "roleDefinitionId": "ab8e14d6-4a74-4a29-9ba8-549422addade",
+                    "principalIdDisplayName": "Sentinel - Contributer"
+                },
+                    ]
+                }                
+        }
+}

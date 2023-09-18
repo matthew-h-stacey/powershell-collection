@@ -1,29 +1,4 @@
-<#
-.SYNOPSIS
-	Generate a backup report for all VMs in a client tenant, or across many tenants.
-
-.DESCRIPTION
-	This script does two main things. It will iterate through Azure subscriptions to find all VMs and report if they are backed up, and for those that are backed up, it will pull the relevant details to the backup jobs and status.
-
-.PARAMETER Clients
-	The array of clients to select from the Cloud Manager interface.
-
-.PARAMETER FailedJobsOnly
-	If set to true, this will only report VMs whose backup ProtectionStatus is "Unhealthy." That includes VMs with failed jobs, but also VMs that aren't backed up at all.
-
-.PARAMETER OutputFormat
-	Output using the SkyKick-formatted HTML report, or to a downloaded CSV.
-
-.EXAMPLE
-	Used via Command Center in Cloud Manager
-
-.NOTES
-	Author: Matt Stacey
-	Date:   June 13, 2023
-	Tags: 	#CloudManager
-#>
-
-function Get-AzVMBackupReport {
+function Get-AzVMBackupReportBR {
 
     [SkyKickCommand(DisplayName = "Set Parameter Sections", Sections = { "Client", "Options" })]
     param(
@@ -43,13 +18,13 @@ function Get-AzVMBackupReport {
         )]
         [Boolean]$FailedJobsOnly = $false,
 
-        [Parameter(Mandatory = $true)]
         [SkyKickParameter(
             DisplayName = "Output format",    
             Section = "Options",
             DisplayOrder = 2,
             HintText = "Choose to output in Cloud Manager's HTML format or CSV."
         )]
+        [Parameter(Mandatory=$True)]
         [ValidateSet("CSV", "HTML")]
         [String]$OutputFormat        
     
@@ -57,10 +32,6 @@ function Get-AzVMBackupReport {
 
     # Empty array to store the results
     $AzVMBackupReport = @()
-
-    # CSV filename
-    $timestamp = (Get-Date).ToString("MM-dd-yyyy_HHmm")
-    $CsvFilename = "AzureBackupReport_$timestamp_UTC.csv"
 
     # Foreach loop to iterate through selected clients
     foreach ( $Client in $Clients) {    
@@ -97,17 +68,10 @@ function Get-AzVMBackupReport {
                             Write-Output "[WARNING] VM backup is not configured for $($_.Name)"
                             $AzVMBackupReport += [PSCustomObject]@{
                                 Client              = $ClientName
-                                Name                = ($_.Name).ToUpper()
-                                ProtectionStatus    = "Unhealthy"
-                                ProtectionState     = "Backup not configured"
-                                LatestRecoveryPoint = "N/A"
-                                LastBackupStatus    = "N/A"
-                                LastBackupTime      = "N/A"
-                                Policy              = "N/A"
-                                Location            = "N/A"
-                                Subscription        = "N/A"
-                                ResourceGroupName   = "N/A"
-                                Vault               = "N/A"
+                                Device              = ($_.Name).ToUpper()
+                                Status              = "Warning"
+                                'Backup Date'       = "N/A"
+                                Job                 = "Azure"
                             }
                         }
                     }
@@ -142,17 +106,15 @@ function Get-AzVMBackupReport {
                                 $AzVMBackupReport += [PSCustomObject]@{
 
                                     Client              = $ClientName
-                                    Name                = $VMName.ToUpper()
-                                    ProtectionStatus    = $BackupItem.ProtectionStatus
-                                    ProtectionState     = $BackupItem.ProtectionState  
-                                    LatestRecoveryPoint = $BackupItem.LatestRecoveryPoint
-                                    LastBackupStatus    = $BackupItem.LastBackupStatus
-                                    LastBackupTime      = $BackupItem.LastBackupTime
-                                    Policy              = $BackupItem.ProtectionPolicyName
-                                    Location            = $Vault.Location
-                                    Subscription        = $Subscription.Name
-                                    ResourceGroupName   = $Vault.ResourceGroupName
-                                    Vault               = $Vault.Name
+                                    Device              = $VMName.ToUpper()
+                                    Status              = switch ($BackupItem.LastBackupStatus) {
+                                                            "Completed" { "Success" }
+                                                            "Failed" { "Failed" }
+                                                            "Warning" { "Warning" }
+                                                            default { $BackupItem.LastBackupStatus }
+                                                        }
+                                    'Backup Date'       = $BackupItem.LastBackupTime
+                                    Job                 = "Azure"
 
                                 }
 
@@ -181,10 +143,10 @@ function Get-AzVMBackupReport {
 
         switch ( $FailedJobsOnly) {
             True {
-                $AzVMBackupReport = $AzVMBackupReport | Where-Object { $_.ProtectionStatus -ne "Healthy" } 
+                $AzVMBackupReport = $AzVMBackupReport | Where-Object { $_.Status -ne "Success" } 
                 switch ( $OutputFormat ) {
                     "CSV" {
-                        $AzVMBackupReport | ConvertTo-CSV | Out-SkyKickFile -Filename $CsvFilename
+                        $AzVMBackupReport | ConvertTo-CSV | Out-SkyKickFile -Filename AzureBackupReport.csv
                     }
                     "HTML" {
                         $AzVMBackupReport | Out-SkyKickTableToHtmlReport -IncludePartnerLogo -ReportTitle "Azure VM Backup Report" -ReportFooter "Report created using SkyKick Cloud Manager" -OutTo NewTab
@@ -194,7 +156,7 @@ function Get-AzVMBackupReport {
             False {
                 switch ( $OutputFormat ) {
                     "CSV" {
-                        $AzVMBackupReport | ConvertTo-CSV | Out-SkyKickFile -Filename $CsvFilename
+                        $AzVMBackupReport | ConvertTo-CSV | Out-SkyKickFile -Filename AzureBackupReport.csv
                     }
                     "HTML" {
                         $AzVMBackupReport | Out-SkyKickTableToHtmlReport -IncludePartnerLogo -ReportTitle "Azure VM Backup Report" -ReportFooter "Report created using SkyKick Cloud Manager" -OutTo NewTab
@@ -203,7 +165,5 @@ function Get-AzVMBackupReport {
             }
         }
     }
-
-    Write-Output "[INFO] Sending output to $OutputFormat"
 
 }

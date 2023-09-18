@@ -1,0 +1,27 @@
+Objective: Create a text file in CM with a list of strings to perform a foreach operation (ex: text file with UserPrincipalNames)
+
+1. Prepare your CSV/TXT file on your own PC with the list of strings
+
+2. Access CloudManager console
+
+3. Navigate to your user folder
+cd /cloud-manager/users/{YourUserName}
+
+4. From that directory, use "cat" to create the text file and start piping input
+cat > UserPrincipalNames.txt
+
+5. Paste in the list of strings from step #1
+
+6. CTRL+C to break out and finish creating the file
+
+7. Test. Either view the contents of the entire file, or check a specific value in the array
+    Test #1: 
+    cat UserPrincipalNames.txt
+
+    Test #2:
+    $UPNs = Get-Content UserPrincipalNames.txt
+    $UPNs[2]
+
+8. Run your commands
+$UPNs = Get-Content UserPrincipalNames.txt
+foreach ( $UPN in $UPNs ) { # commands here }

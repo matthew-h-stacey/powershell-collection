@@ -1,0 +1,14 @@
+# Return one array with all objects, supporting count past the default 999
+
+$ObjectType = "users" # example, "users" or "devices"
+$URI = 'https://graph.microsoft.com/v1.0/' + $ObjectType + '?$top=999'
+
+$MSGraphOutput = @()
+$nextLink = $null
+do {
+    $uri = if ($nextLink) { $nextLink } else { $URI }
+    $response = Invoke-MgGraphRequest -Uri $uri -Method GET
+    $output = $response.Value
+    $MSGraphOutput += $output
+    $nextLink = $response.'@odata.nextLink'
+} until (-not $nextLink)

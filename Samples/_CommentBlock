@@ -1,0 +1,24 @@
+<#
+.SYNOPSIS
+	This script does really cool stuff
+
+.DESCRIPTION
+	This script uses a combination of MS Graph and Azure AD modules to export a detailed report of client applications from a tenant
+
+.PARAMETER ClientName
+	This is the name of the client.
+
+.PARAMETER Application
+	The application to check.
+
+.PARAMETER ShowHidden
+	Optional switch to show hidden applications
+
+.EXAMPLE
+	Get-ClientApplications.ps1 -ClientName Contoso -Application TestApplication -ShowHidden
+
+.NOTES
+	Author: John Smith
+	Date:   January 1, 2023
+	Tags: 	#IntunePortal, 	#CloudManager, #FilePermissions
+#>
