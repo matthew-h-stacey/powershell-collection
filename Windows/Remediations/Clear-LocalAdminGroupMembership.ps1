@@ -8,26 +8,8 @@ function Write-Log {
     Add-Content $logFile -Value "$(Get-Date -Format "MM/dd/yyyy HH:mm") $logstring"
 }
 
-function New-Folder {
-    Param([Parameter(Mandatory = $True)][String] $folderPath)
-    if (-not (Test-Path -LiteralPath $folderPath)) {
-        try {
-            New-Item -Path $folderPath -ItemType Directory -ErrorAction Stop | Out-Null
-            Write-Host "Created folder: $folderPath"
-        }
-        catch {
-            Write-Error -Message "Unable to create directory '$folderPath'. Error was: $_" -ErrorAction Stop
-        }
-    }
-    else {
-        # FolderPath already exists, continue
-    }
-
-}
-
 # Logging
 $OutputDirectory = "C:\Windows\System32\LogFiles\EndpointManager"
-New-Folder $OutputDirectory
 $LogFile = "$OutputDirectory\Clear-LocalGroupMembership.log" 
 
 # Build a list of users who should not be removed from the group
