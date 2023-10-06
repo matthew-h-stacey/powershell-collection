@@ -1,6 +1,11 @@
 function Write-Log {
-    Param ([string]$logstring)
-    Add-Content $logFile -Value "$(Get-Date -Format "MM/dd/yyyy HH:mm") $logstring"
+    param (
+        [String]
+        $LogString
+    )
+    Add-Content -Path $LogFile -Value "$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss') $LogString"
 }
-
-$logFile = "$workDir\MyLog_$((Get-Date -Format "MM-dd-yyyy_HHmm")).log" 
+# Example:
+# $OutputDirectory = "C:\Windows\System32\LogFiles\EndpointManager"
+# $LogFile = "$OutputDirectory\LocalAdminMembership.log"
+# Write-Log "[INFO] Script started"

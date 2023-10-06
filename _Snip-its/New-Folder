@@ -1,17 +1,17 @@
-# ex: New-Folder -folderPath C:\TempPath
+# ex: New-Folder -Path C:\TempPath
 function New-Folder {
-    Param([Parameter(Mandatory = $True)][String] $folderPath)
-    if (-not (Test-Path -LiteralPath $folderPath)) {
-        try {
-            New-Item -Path $folderPath -ItemType Directory -ErrorAction Stop | Out-Null
-            Write-Host "Created folder: $folderPath"
+        Param([Parameter(Mandatory = $True)][String] $Path)
+        if (-not (Test-Path -LiteralPath $Path)) {
+            try {
+                New-Item -Path $Path -ItemType Directory -ErrorAction Stop | Out-Null
+                Write-Host "Created folder: $Path"
+            }
+            catch {
+                Write-Error -Message "Unable to create directory '$Path'. Error was: $_" -ErrorAction Stop
+            }
         }
-        catch {
-            Write-Error -Message "Unable to create directory '$folderPath'. Error was: $_" -ErrorAction Stop
+        else {
+            "$Path already exists, continuing ..."
         }
-    }
-    else {
-        "$folderPath already exists, continuing ..."
-    }
 
-}
+    }
