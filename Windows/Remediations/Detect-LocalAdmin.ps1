@@ -15,7 +15,7 @@ function New-Folder {
         }
     }
     else {
-        "$Path already exists, continuing ..."
+        # Folder already exists, continue
     }
 
 }
@@ -57,7 +57,8 @@ function Detect-LocalAdmin {
         # Provide exit codes depending on whether or not remediation is required
         switch ( $IsLocalAdmin ) {
             True {
-                # User is already a local admin, no action needed
+                # User is already a local admin, no action needed. Write to the log and console output
+                Write-Output "[INFO] User $UserName is already a local admin. No remediation needed"
                 Write-Log "[INFO] User $UserName is already a local admin. No remediation needed"
                 exit 0
             }
