@@ -1,22 +1,15 @@
-# Logging
-$OutputDirectory = "C:\Windows\System32\LogFiles\EndpointManager"
-New-Folder -Path $OutputDirectory
-$LogFile = "$OutputDirectory\LocalAdminMembership.log"
-Write-Log "[INFO] Starting Detect-LocalAdminMembership. Retain username: $UserName"
-
 function New-Folder {
     Param([Parameter(Mandatory = $True)][String] $Path)
     if (-not (Test-Path -LiteralPath $Path)) {
         try {
             New-Item -Path $Path -ItemType Directory -ErrorAction Stop | Out-Null
-            Write-Host "Created folder: $Path"
         }
         catch {
             Write-Error -Message "Unable to create directory '$Path'. Error was: $_" -ErrorAction Stop
         }
     }
     else {
-        "$Path already exists, continuing ..."
+        # Path already exists, continue
     }
 
 }
@@ -33,7 +26,7 @@ function Detect-LocalAdminMembership {
 
     param (
         # Enter the name of the user who should retain their admin access to the PC. Typically this should be a Windows LAPS account
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [String]
         $RetainAdmin
     )
@@ -77,4 +70,20 @@ function Detect-LocalAdminMembership {
 
 }
 
-Detect-LocalAdminMembership -RetainAdmin "cloud_laps"
+# Local account used for Windows LAPS
+$RetainAdmin = "cloud_laps"
+
+# Logging
+$OutputDirectory = "C:\Windows\System32\LogFiles\EndpointManager"
+New-Folder -Path $OutputDirectory
+$LogFile = "$OutputDirectory\LocalAdminMembership.log"
+Write-Log "[INFO] Starting Detect-LocalAdminMembership. Retain username: $RetainAdmin"
+
+# Execution
+try {
+    Detect-LocalAdminMembership -RetainAdmin $RetainAdmin
+    Write-Output "[INFO] Detection executed successfully. Check log file for output ($LogFile)"
+}
+catch {
+    Write-Output "[ERROR] Failed to execute detection. Error: $($_.Exception.Message)"
+}
