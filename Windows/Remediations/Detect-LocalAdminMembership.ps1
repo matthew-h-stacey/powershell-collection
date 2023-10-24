@@ -1,3 +1,6 @@
+# Local account used for Windows LAPS
+$RetainAdmin = "cloud_laps"
+
 function New-Folder {
     Param([Parameter(Mandatory = $True)][String] $Path)
     if (-not (Test-Path -LiteralPath $Path)) {
@@ -69,9 +72,6 @@ function Detect-LocalAdminMembership {
     }
 
 }
-
-# Local account used for Windows LAPS
-$RetainAdmin = "cloud_laps"
 
 # Logging
 $OutputDirectory = "C:\Windows\System32\LogFiles\EndpointManager"

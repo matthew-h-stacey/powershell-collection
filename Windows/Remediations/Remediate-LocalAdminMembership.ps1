@@ -1,4 +1,12 @@
-﻿function Write-Log {
+﻿# Local account used for Windows LAPS
+$RetainAdmin = "cloud_laps"
+
+# Logging
+$OutputDirectory = "C:\Windows\System32\LogFiles\EndpointManager"
+$LogFile = "$OutputDirectory\LocalAdminMembership.log" 
+Write-Log "[INFO] Starting Remediate-LocalAdminMembership. Retain username: $RetainAdmin"
+
+function Write-Log {
     Param ([string]$logstring)
     Add-Content $logFile -Value "$(Get-Date -Format "MM/dd/yyyy HH:mm:ss") $logstring"
 }
@@ -43,14 +51,6 @@ function Remediate-LocalAdminMembership {
     }
 
 }
-
-# Local account used for Windows LAPS
-$RetainAdmin = "cloud_laps"
-
-# Logging
-$OutputDirectory = "C:\Windows\System32\LogFiles\EndpointManager"
-$LogFile = "$OutputDirectory\LocalAdminMembership.log" 
-Write-Log "[INFO] Starting Remediate-LocalAdminMembership. Retain username: $RetainAdmin"
 
 # Execution
 try {

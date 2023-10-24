@@ -55,8 +55,9 @@ function Get-AzVMBackupReport {
     
     )
 
-    # Empty array to store the results
-    $AzVMBackupReport = @()
+    
+    $AzVMBackupReport = @() # Empty array to store the results
+    $VMDatadisks = @() # Empty array to store datadisk arrays
 
     # CSV filename
     $timestamp = (Get-Date).ToString("MM-dd-yyyy_HHmm")
@@ -94,21 +95,29 @@ function Get-AzVMBackupReport {
                     try {
                         $BackedUp = Get-AzRecoveryServicesBackupStatus -ResourceGroupName $_.ResourceGroupName -Name $_.Name -Type AzureVM | Select-Object -ExpandProperty BackedUp
                         if (!( $BackedUp )) {
-                            Write-Output "[WARNING] VM backup is not configured for $($_.Name)"
+                            Write-Output "[WARNING] Azure VM backup is not configured for $($_.Name)"
                             $AzVMBackupReport += [PSCustomObject]@{
-                                Client              = $ClientName
-                                Name                = ($_.Name).ToUpper()
-                                ProtectionStatus    = "Unhealthy"
-                                ProtectionState     = "Backup not configured"
-                                LatestRecoveryPoint = "N/A"
-                                LastBackupStatus    = "N/A"
-                                LastBackupTime      = "N/A"
-                                Policy              = "N/A"
-                                Location            = "N/A"
-                                Subscription        = "N/A"
-                                ResourceGroupName   = "N/A"
-                                Vault               = "N/A"
+                                Client               = $ClientName
+                                Name                 = ($_.Name).ToUpper()
+                                ProtectionStatus     = "Unhealthy"
+                                ProtectionState      = "Backup not configured"
+                                LatestRecoveryPoint  = "N/A"
+                                LastBackupStatus     = "N/A"
+                                LastBackupTime       = "N/A"
+                                Policy               = "N/A"
+                                DataDiskIDs          = "N/A"
+                                DataDisksIDsBackedUp = "N/A"
+                                Location             = "N/A"
+                                Subscription         = "N/A"
+                                ResourceGroupName    = "N/A"
+                                Vault                = "N/A"
                             }
+                        }
+                        if ( $BackedUp) {
+                            $VMDatadisks += @{
+                                VM        = ($_.Name).ToUpper()
+                                Datadisks = $_.StorageProfile.DataDisks.Lun
+                            }                          
                         }
                     }
                     catch {
@@ -136,23 +145,40 @@ function Get-AzVMBackupReport {
                     
                             foreach ( $Item in $Container ) {
 
-                                $BackupItem = Get-AzRecoveryServicesBackupItem -Container $Item -WorkloadType AzureVM -VaultId $Vault.ID
-                                $VMName = ($BackupItem.ContainerName -split ';')[-1]
+                                $BackupItem = Get-AzRecoveryServicesBackupItem -WorkloadType AzureVM -Container $Item -VaultId $Vault.ID # Backup instance object
+                                $VMName = (($BackupItem.ContainerName -split ';')[-1]).ToUpper() # Formatted VM name
+                                $DataDiskIDs = ($VMDatadisks | Where-Object { $_.VM -like $VMName } | Select-Object -ExpandProperty Datadisks) -join ', ' # LUN IDs for data drives
+
+                                # If the VM has LUNs present for data disks, check to see which of those disks are incuded in the backup. Separate handling for empty value to fix empty string outputting incorrectly
+                                if ( $DataDiskIDs ) {
+                                    if ( $BackupItem.DiskLunList.Count -gt 0 ) {
+                                        $DataDisksBackedUp = $BackupItem.DiskLunList -join ', '
+                                    }
+                                    else {
+                                        $DataDisksBackedUp = "None"
+                                    }
+                                }
+                                else {
+                                    $DataDisksBackedUp = ""
+                                }
+
 
                                 $AzVMBackupReport += [PSCustomObject]@{
 
-                                    Client              = $ClientName
-                                    Name                = $VMName.ToUpper()
-                                    ProtectionStatus    = $BackupItem.ProtectionStatus
-                                    ProtectionState     = $BackupItem.ProtectionState  
-                                    LatestRecoveryPoint = $BackupItem.LatestRecoveryPoint
-                                    LastBackupStatus    = $BackupItem.LastBackupStatus
-                                    LastBackupTime      = $BackupItem.LastBackupTime
-                                    Policy              = $BackupItem.ProtectionPolicyName
-                                    Location            = $Vault.Location
-                                    Subscription        = $Subscription.Name
-                                    ResourceGroupName   = $Vault.ResourceGroupName
-                                    Vault               = $Vault.Name
+                                    Client               = $ClientName
+                                    Name                 = $VMName
+                                    ProtectionStatus     = $BackupItem.ProtectionStatus
+                                    ProtectionState      = $BackupItem.ProtectionState  
+                                    LatestRecoveryPoint  = $BackupItem.LatestRecoveryPoint
+                                    LastBackupStatus     = $BackupItem.LastBackupStatus
+                                    LastBackupTime       = $BackupItem.LastBackupTime
+                                    Policy               = $BackupItem.ProtectionPolicyName
+                                    DataDiskIDs          = $DataDiskIDs
+                                    DataDisksIDsBackedUp = $DataDisksBackedUp
+                                    Location             = $Vault.Location
+                                    Subscription         = $Subscription.Name
+                                    ResourceGroupName    = $Vault.ResourceGroupName
+                                    Vault                = $Vault.Name
 
                                 }
 

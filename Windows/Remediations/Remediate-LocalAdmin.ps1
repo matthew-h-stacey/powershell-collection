@@ -1,3 +1,6 @@
+# Local account used for Windows LAPS
+$UserName = "cloud_laps"
+
 # Logging
 $OutputDirectory = "C:\Windows\System32\LogFiles\EndpointManager"
 $LogFile = "$OutputDirectory\LocalAdminUser.log"
@@ -93,4 +96,4 @@ function Remediate-LocalAdmin {
 
 }
 
-Remediate-LocalAdmin -UserName "cloud_laps"
+Remediate-LocalAdmin -UserName $UserName

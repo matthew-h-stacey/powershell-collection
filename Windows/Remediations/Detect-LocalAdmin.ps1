@@ -1,4 +1,7 @@
-﻿# Logging
+﻿# Local account used for Windows LAPS
+$UserName = "cloud_laps"
+
+# Logging
 $OutputDirectory = "C:\Windows\System32\LogFiles\EndpointManager"
 New-Folder -Path $OutputDirectory
 $LogFile = "$OutputDirectory\LocalAdminUser.log"
@@ -79,4 +82,4 @@ function Detect-LocalAdmin {
 
 }
 
-Detect-LocalAdmin -UserName "cloud_laps"
+Detect-LocalAdmin -UserName $UserName
