@@ -1,6 +1,6 @@
-$Url = "https://tech.bcservice.net/LabTech/Deployment.aspx?InstallerToken=f79667ce1ddc4a2e868fc80fd7370c1c"
+$Url = "https://download.advanced-ip-scanner.com/download/files/Advanced_IP_Scanner_2.5.4594.1.exe"
 $LocalPath = "C:\TempPath"
-$FileName = "Automate.msi"
+$FileName = "Advanced_IP_Scanner_2.5.4594.1.exe"
 
 $FilePath = "$LocalPath\$FileName"
-(New-Object System.Net.WebClient).DownloadFile($Url,$FilePath)
+(New-Object System.Net.WebClient).DownloadFile($Url, $FilePath)
