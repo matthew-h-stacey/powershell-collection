@@ -1,5 +1,6 @@
 # Local account used for Windows LAPS
 $UserName = "cloud_laps"
+$UserDescription = "User account for Cloud LAPS"
 
 # Logging
 $OutputDirectory = "C:\Windows\System32\LogFiles\EndpointManager"
@@ -46,7 +47,12 @@ function Remediate-LocalAdmin {
         # Username for the new local admin
         [Parameter(Mandatory = $true)]
         [String]
-        $UserName
+        $UserName,
+
+        # Description for the new local admin
+        [Parameter(Mandatory = $false)]
+        [String]
+        $UserDescription
     )
 
     $UserExists = (Get-LocalUser).Name -Contains $UserName
@@ -70,14 +76,16 @@ function Remediate-LocalAdmin {
             }
             else {
                 Write-Log "[INFO] User $UserName is already a local admin. Exiting remediation"
+                exit 0
             }
         }
         False {
             $Password = (ConvertTo-SecureString (Get-RandomPassword -Length $PasswordLength) -AsPlainText -Force)
 
             $params = @{
-                Name     = $UserName
-                Password = $Password
+                Name        = $UserName
+                Password    = $Password
+                Description = $UserDescription
             }
 
             try { 
@@ -96,4 +104,4 @@ function Remediate-LocalAdmin {
 
 }
 
-Remediate-LocalAdmin -UserName $UserName
+Remediate-LocalAdmin -UserName $UserName -UserDescription $UserDescription
