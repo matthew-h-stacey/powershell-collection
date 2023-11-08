@@ -14,3 +14,5 @@ Write-host "Exported public key to $workDir\$($certName).cer"
 $mycert | select Thumbprint
 
 # Finally, upload the cer to the App Registration in Azure AD
+
+

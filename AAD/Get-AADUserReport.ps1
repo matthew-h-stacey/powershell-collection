@@ -6,16 +6,24 @@ TO-DO:
 
 function Get-AADUserReport {
 
-    [SkyKickCommand(DisplayName = "Set Parameter Sections", Sections = { "Scope", "Activity", "Licenses", "Company Information", "Location", "Phone numbers" })]
+[SkyKickCommand(DisplayName = "Set Parameter Sections", Sections = { "Scope","Activity", "Licenses", "Company Information", "Location", "Phone numbers" })]
     param(
 	
         [SkyKickParameter(
             DisplayName = "Only show active users",    
             Section = "Scope",
             DisplayOrder = 1,
-            HintText = "Setting this to True filters out all unlicensed users, and any members of this Azure AD group: CM_ActiveUsers."
+            HintText = "Enabling this settings filters out all unlicensed users, and any members of this Azure AD group: CM_NonUserAccounts. Before enabling this, ensure that the group is present and populated with the service/admin accounts that should be excluded from this report."
         )]
         [Boolean]$OnlyActiveUsers = $false, # "user" here implies a human user
+
+        [SkyKickParameter(
+            DisplayName = "Include tenant license report",    
+            Section = "Scope",
+            DisplayOrder = 1,
+            HintText = "Enabling this settings will generate a second report for licenses on the tenant."
+        )]
+        [Boolean]$IncludeM365LicenseReport = $false,
 
         [SkyKickParameter(
             DisplayName = "Last Login",    
@@ -85,9 +93,9 @@ function Get-AADUserReport {
             DisplayName = "Manager",    
             Section = "Company Information",
             DisplayOrder = 9,
-            HintText = "Display the user's job title."
+            HintText = "Display the user's manager."
         )]
-        [Boolean]$IncludeManager = $true,
+        [Boolean]$IncludeManager = $false,
 
         [SkyKickParameter(
             DisplayName = "Employee ID",    
@@ -135,70 +143,76 @@ function Get-AADUserReport {
             DisplayOrder = 15,
             HintText = "Display the user's phone number."
         )]
-        [Boolean]$IncludePhoneNumber = $true ,
+        [Boolean]$IncludePhoneNumber = $true,
 		
-        [SkyKickParameter(
+		[SkyKickParameter(
             DisplayName = "Teams number",    
             Section = "Phone numbers",
             DisplayOrder = 16,
             HintText = "Display the user's Teams phone number."
         )]
-        [Boolean]$IncludeTeamsNumber = $true
-    )
+        [Boolean]$IncludeTeamsNumber = $false
+	)
 
     # Return one array ($MSGraphOutput) with all objects, supporting count past the default 999
-    $URI = 'https://graph.microsoft.com/beta/users?$select=DisplayName,UserPrincipalName,Mail,UserType,AccountEnabled,signInActivity,AssignedLicenses,LastPasswordChangeDateTime,CompanyName,EmployeeId,Department,JobTitle,StreetAddress,City,State,Country,BusinessPhones,MobilePhone&$top=999'
+    $Method = "GET"
+    $Uri = 'https://graph.microsoft.com/beta/users?$select=DisplayName,UserPrincipalName,Mail,UserType,AccountEnabled,onPremisesSyncEnabled,signInActivity,AssignedLicenses,LastPasswordChangeDateTime,CompanyName,EmployeeId,Department,JobTitle,StreetAddress,City,State,Country,BusinessPhones,MobilePhone&$top=999'
     $MSGraphOutput = @()
     $nextLink = $null
     do {
-        $uri = if ($nextLink) { $nextLink } else { $URI }
-        $response = Invoke-MgGraphRequest -Uri $uri -Method GET
+        $Uri = if ($nextLink) { $nextLink } else { $Uri }
+        $response = Invoke-MgGraphRequest -Uri $Uri -Method $Method
         $output = $response.Value
         $MSGraphOutput += $output
         $nextLink = $response.'@odata.nextLink'
     } until (-not $nextLink)
 
-    if ( $OnlyActiveUsers ) {
-        # If the scope is set to active users only, filter out accounts in CM_NonUserAccounts and those without a license
-
-        try {
-            $ID = (Get-MgGroup -Filter "DisplayName eq 'CM_NonUserAccounts'" -WarningAction Stop -ErrorAction Stop).Id
-        }
-        catch {
-            Write-Error "Group missing from Azure AD: CM_NonUserAccounts. Please ensure the group is created and populated with the service/admin accounts that should be excluded from this report."
+    # If the scope is set to active users only, filter out accounts in CM_NonUserAccounts and those without a license
+    if ( $OnlyActiveUsers ) { 
+        $ID = (Get-MgGroup -Filter "DisplayName eq 'CM_NonUserAccounts'" -WarningAction Stop -ErrorAction Stop).Id
+        if ( $null -eq $ID ){
+            Write-Output "Group missing from Azure AD: CM_NonUserAccounts. Please ensure the group is created and populated with the service/admin accounts that should be excluded from this report."
             exit
         }
-        $URI = 'https://graph.microsoft.com/v1.0/groups/{0}/members/microsoft.graph.user?$select=UserPrincipalName' -f $ID
+        $URI = 'https://graph.microsoft.com/v1.0/groups/{0}/members/microsoft.graph.user?$select=UserPrincipalName' -f $ID # force string formatting, inserting $ID into {0}
         $NonUserAccounts = (Invoke-MgGraphRequest -Uri $URI).Value.Values | Sort-Object # object with UPNs of members of CM_NonUserAccounts
         $MSGraphOutput = $MSGraphOutput | Where-Object { $_.UserPrincipalName -notin $NonUserAccounts } # removes $NonUserAccounts from $MSGraphOutput
         $MSGraphOutput = $MSGraphOutput | Where-Object { $_.AssignedLicenses -ne @() } # removes users that don't have licenses
     }
 
-
+    # Report variables
     $ClientName = (Get-CustomerContext).CustomerName
+    $ReportTitle = "$($ClientName) AzureAD User Report" 
+    $ReportFooter = "Report created using SkyKick Cloud Manager"
 
-    # Empty array to store PSCustomObjects for later reporting
+    # Empty array used to store output before exporting the report to HTML
     $results = @()
 
     # Table for Microsoft SKU ID to friendly names
     $SKUsMappingTable = Get-Microsoft365LicensesMappingTable
 
     # All Teams numbers associated with users
-    $allTeamsNumbers = Get-CsOnlineUser | Where-Object { $_.LineURI -notlike $null } | Select-Object DisplayName, UserPrincipalName, LineURI
+    if ( $IncludeTeamsNumber ) {
+        $allTeamsNumbers = Get-CsOnlineUser | Where-Object { $_.LineURI -notlike $null } | Select-Object DisplayName, UserPrincipalName, LineURI
+    }
 
+    # Iterate through each user in the Graph output
+    # Create a user hash table with basic properties and create a second hash table for all the other optional properties
+    # Based on the options selected at runtime, add the selected optional properties to the original user hash table
+    # Add the user hash table to the results array as a PSCustomObject for easy reporting
     foreach ( $User in $MSGraphOutput) {
 
         $UPN = $User.UserPrincipalName
-        $AADUser = Get-AzureADUser -ObjectId $UPN
+        #$AADUser = Get-AzureADUser -ObjectId $UPN
 
         # Retrieve sign-in information
         if ($IncludeLastLogin) { 
             $LastLogin = $user.signInActivity.lastSignInDateTime
             if ($LastLogin) {
-                $InactiveDays = (New-TimeSpan -Start $user.signInActivity.lastSignInDateTime).Days
+    	        $InactiveDays = (New-TimeSpan -Start $user.signInActivity.lastSignInDateTime).Days
             }
             else {
-                $InactiveDays = "N/A" 
+	            $InactiveDays = "N/A" 
             }
         }
 
@@ -211,93 +225,98 @@ function Get-AADUserReport {
         # Retrieve Teams number, if the user has one
         $TeamsNumber = $allTeamsNumbers | Where-Object { $_.UserPrincipalName -like $UPN } | Select-Object -ExpandProperty LineURI
 
-        $userHashTable = @{
-            DisplayName    = $User.DisplayName
-            UPN            = $UPN
-            Mail           = $User.Mail
-            UserType       = $User.UserType
-            AccountEnabled = $User.AccountEnabled
+        $Source = if ( $User.onPremisesSyncEnabled -eq $True ) { "On-premises" } else { "Cloud only" }
+
+        $userHashTable = [ordered]@{
+            DisplayName                 =   $User.DisplayName
+            UPN                         =   $UPN
+            Mail                        =   $User.Mail
+            UserType                    =   $User.UserType
+            AccountEnabled              =   $User.AccountEnabled
+            Source                      =   $Source
         }
         $optionalProperties = @(
             @{
-                Name    = 'LastLogin'  
-                Include = $IncludeLastLogin
-                Value   = $LastLogin
-            },
+		        Name = 'LastLogin'  
+		        Include = $IncludeLastLogin
+		        Value = $LastLogin
+	        },
             @{
-                Name    = 'InactiveDays'
+                Name = 'InactiveDays'
                 Include = $IncludeInactiveDays      	
-                Value   = $InactiveDays
+                Value = $InactiveDays
             },
             @{
-                Name    = 'LastPasswordChange'
+                Name = 'LastPasswordChange'
                 Include = $IncludeLastPasswordChange      	
-                Value   = $User.LastPasswordChangeDateTime
+                Value = $User.LastPasswordChangeDateTime
             },
             @{
-                Name    = 'DaysSincePwChange'
+                Name = 'DaysSincePwChange'
                 Include = $IncludeDaysSincePwChange    	
-                Value   = (New-TimeSpan -Start $User.LastPasswordChangeDateTime).Days
+                Value = (New-TimeSpan -Start $User.LastPasswordChangeDateTime).Days
             },
             @{
-                Name    = 'Licenses'
+                Name = 'Licenses'
                 Include = $IncludeLicenses      	
-                Value   = $Licenses -join "; "
+                Value = $Licenses -join "; "
             },
             @{
-                Name    = 'CompanyName'
+                Name = 'CompanyName'
                 Include = $IncludeCompanyName      	
-                Value   = $User.CompanyName
+                Value = $User.CompanyName
             },
             @{
-                Name    = 'Department'
+                Name = 'Department'
                 Include = $IncludeDepartment      	
-                Value   = $User.Department
+                Value = $User.Department
             },
             @{
-                Name    = 'JobTitle'
+                Name = 'JobTitle'
                 Include = $IncludeJobTitle      	
-                Value   = $User.JobTitle
+                Value = $User.JobTitle
             },
             @{
-                Name    = 'Manager'
+                Name = 'Manager'
                 Include = $IncludeManager      	
-                Value   = (Get-AzureADUserManager -ObjectId $AADUser.UserPrincipalName).DisplayName
+                Value = if ($IncludeManager) {
+                        (Get-MgUserManager -UserId $User.Id).AdditionalProperties.displayName
+                    }
             },
             @{
-                Name    = 'EmployeeId'
+                Name = 'EmployeeId'
                 Include = $IncludeEmployeeId      	
-                Value   = $User.employeeId
+                Value = $User.employeeId
             },
             @{
-                Name    = 'StreetAddress'
+                Name = 'StreetAddress'
                 Include = $IncludeStreetAddress      	
-                Value   = $User.StreetAddress
+                Value = $User.StreetAddress
             },
             @{
-                Name    = 'City'
+                Name = 'City'
                 Include = $IncludeCity      	
-                Value   = $User.City
+                Value = $User.City
             },
             @{
-                Name    = 'State'
+                Name = 'State'
                 Include = $IncludeState      	
-                Value   = $User.State
+                Value = $User.State
             },
             @{
-                Name    = 'Country'
+                Name = 'Country'
                 Include = $IncludeCountry  	
-                Value   = $User.Country
+                Value = $User.Country
             },
             @{
-                Name    = 'PhoneNumber'
+                Name = 'PhoneNumber'
                 Include = $IncludePhoneNumber      	
-                Value   = $AADUser.TelephoneNumber
+                Value = $User.BusinessPhones
             },
             @{
-                Name    = 'TeamsNumber'
+                Name = 'TeamsNumber'
                 Include = $IncludeTeamsNumber      	
-                Value   = $TeamsNumber
+                Value = $TeamsNumber
             }
         )
         foreach ($property in $optionalProperties) {
@@ -305,36 +324,14 @@ function Get-AADUserReport {
                 $userHashTable.Add($property.Name, $property.Value)
             }
         }
-        $results += $userHashTable
+        $results += [PSCustomObject]$userHashTable
     }
 
+    Out-SKSolutionReport -Content $results -ReportTitle $ReportTitle -ReportFooter $ReportFooter -SeparateReportFileForEachCustomer
 
-    # This is a static array to ensure the properties are listed in the desired order. It is called in the results export
-    $PropertyOrder = @(
-        "DisplayName",
-        "UPN",
-        "Mail",
-        "UserType",
-        "AccountEnabled",
-        "LastLogin",
-        "InactiveDays",
-        "LastPasswordChange",
-        "DaysSincePwChange",
-        "Licenses",
-        "CompanyName",
-        "Department",
-        "JobTitle",
-        "Manager",
-        "EmployeeID",
-        "StreetAddress",
-        "City",
-        "State",
-        "Country",
-        "PhoneNumber",
-        "TeamsNumber"
-    )
+    if ( $IncludeM365LicenseReport ) {
+        Get-M365LicenseReport
+    }
 
-
-    $results | select-object $PropertyOrder | Out-SkyKickTableToHtmlReport -IncludePartnerLogo -ReportTitle "$($ClientName) M365 User Report" -ReportFooter "Report created using SkyKick Cloud Manager" -OutTo NewTab
 
 }

@@ -1,73 +1,109 @@
-param (
-    # $DriveLabel should be the domain name used by the Egnyte tenant
-    # Example, for domain: https://contoso.egynte.com, $DriveLabel should be set to "contoso"
-    [Parameter(Mandatory=$true)]
-    [String]
-    $DriveLabel
-)
-
+# Reference for Egnyte cmd:
 # https://helpdesk.egnyte.com/hc/en-us/articles/360026687112-Connected-Folders-on-the-Desktop-App
 
-$IsConnected = Test-Path Z:\
+# Script variables
+$DriveLabel = "northeast"
+$SkipOneDriveKfb = $true
 
-switch ( $IsConnected ) {
+function Connect-FolderToEgnyte {
 
-    True {
+    param (
+        # Name of the folder to connect to Egnyte (Documents/Desktop/Pictures)
+        [Parameter(Mandatory = $true)]
+        [String]
+        $Folder
+    )
 
-        $Egnyte32bit = "${env:ProgramFiles(x86)}\Egnyte Connect\EgnyteClient.exe"
-        $egnyte64bit = "$env:ProgramFiles\Egnyte Connect\EgnyteClient.exe"
+    $CurrentPath = '"' + ($FolderStatus | Where-Object { $_.Name -eq $Folder } | Select-Object -ExpandProperty Path) + '"'
+    $EgnytePath = '"' + "/Private/::egnyte_username::/$Folder" + '"'
+    Write-Output "[INFO] Connecting folder to Egnyte: $CurrentPath"
+    & $InstallPath -command connect_folder -l $DriveLabel -a $CurrentPath -r $EgnytePath 
+   
+}
 
-        if ( Test-Path $Egnyte32bit ) {
-            $InstallPath = $Egnyte32bit
-        }
-        if ( Test-Path $egnyte64bit ) {
-            $InstallPath = $egnyte64bit
-        }
-        
-        $IsDocsRedirected = [Environment]::GetFolderPath("MyDocuments") -like "*OneDrive*"
-        $IsPicsRedirected = [Environment]::GetFolderPath("MyPictures") -like "*OneDrive*"
-        $IsDesktopRedirected = [Environment]::GetFolderPath("Desktop") -like "*OneDrive*"
+function Set-EgnyteFolderBackup {
 
-        switch ( $IsDocsRedirected ) {
-            True {
-                Write-Output "Docs is redirected to OneDrive"
-            }
-            False {
-                Write-Output "Docs is local. Attempting to sync to Egnyte"
-                $command = "-command connect_folder -l $DriveLabel -a 'C:\Users\$env:USERNAME\Documents' -r '/Private/::egnyte_username::/Documents'"
-                Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$InstallPath`" $command" -WindowStyle Hidden
-
-            }
-        }
-        switch ( $IsPicsRedirected ) {
-            True {
-                Write-Output "Pictures are redirected to OneDrive"
-            }
-            False {
-                Write-Output "Pictures are local. Attempting to sync to Egnyte"
-                $command = "-command connect_folder -l $DriveLabel -a 'C:\Users\$env:USERNAME\Pictures' -r '/Private/::egnyte_username::/Pictures'"
-                Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$InstallPath`" $command" -WindowStyle Hidden
-
-            }
-        }
-        switch ( $IsDesktopRedirected ) {
-            True {
-                Write-Output "Desktop is redirected to OneDrive"
-            }
-            False {
-                Write-Output "Desktop is local. Attempting to sync to Egnyte"
-                $command = "-command connect_folder -l $DriveLabel -a 'C:\Users\$env:USERNAME\Desktop' -r '/Private/::egnyte_username::/Desktop'"
-                Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$InstallPath`" $command" -WindowStyle Hidden
-
-            }
-        }
-    }
-
-    False {
-        Write-Output "WARNING: Egnyte is not connected to Z:\, folder sync cannot proceed. Quitting."
+    param (
     
-    }
+        # $DriveLabel should be the domain name used by the Egnyte tenant
+        # Example, for domain: https://contoso.egynte.com, $DriveLabel should be set to "contoso"
+        [Parameter(Mandatory = $true)]
+        [String]
+        $DriveLabel,
 
+        # Optional flag to skip if Desktop/Documents/Pictures are redirected to OneDrive (OneDrive Known Folder Backup)
+        [Parameter(Mandatory = $false)]
+        [Boolean]
+        $SkipOneDriveKfb
+
+    )
+
+    $Egnyte32bit = "${env:ProgramFiles(x86)}\Egnyte Connect\EgnyteClient.exe"
+    $Egnyte64bit = "$env:ProgramFiles\Egnyte Connect\EgnyteClient.exe"
+
+    if ( Test-Path $Egnyte32bit ) {
+        $InstallPath = $Egnyte32bit
+    }
+    if ( Test-Path $Egnyte64bit ) {
+        $InstallPath = $Egnyte64bit
+    }
+        
+    $FolderStatus = @()
+    $DesktopPath = [Environment]::GetFolderPath("Desktop")
+    $DocumentsPath = [Environment]::GetFolderPath("MyDocuments")
+    $PicturesPath = [Environment]::GetFolderPath("MyPictures")
+
+    $FolderStatus += [PSCustomObject]@{
+        Name       = "Desktop"
+        Path       = $DesktopPath
+        KfbEnabled = $DesktopPath -like "*OneDrive*"
+    }
+    $FolderStatus += [PSCustomObject]@{
+        Name       = "Documents"
+        Path       = $DocumentsPath
+        KfbEnabled = $DocumentsPath -like "*OneDrive*"
+    }
+    $FolderStatus += [PSCustomObject]@{
+        Name       = "Pictures"
+        Path       = $PicturesPath
+        KfbEnabled = $PicturesPath -like "*OneDrive*"
+    }
+        
+    foreach ( $Folder in $FolderStatus) { 
+        # If $SkipOneDriveKfb is true, do not connect folders which are already connected to OneDrive
+        if ( $SkipOneDriveKfb ) { 
+            if ( $Folder.KfbEnabled -eq $true ) {
+                $ConnectFolder = $false
+                Write-Output "[INFO] Skipped connecting $($Folder.Name) to Egnyte, folder is backed up to OneDrive"
+            }
+        }
+        # $SkipOneDriveKfb is false, so all folders should be connected to Egnyte
+        else {
+            $ConnectFolder = $true
+        }
+        if ( $ConnectFolder -eq $true ) {
+            Connect-FolderToEgnyte -Folder $Folder.Name
+        }
+    }
 
 }
 
+
+$IsEgnyteInstalled = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like "*egnyte*desktop*" }
+if ( $IsEgnyteInstalled ) {
+
+    $IsConnected = Test-Path Z:\
+
+    switch ( $IsConnected ) {
+
+        True {
+            Set-EgnyteFolderBackup -DriveLabel $DriveLabel -SkipOneDriveKfb $SkipOneDriveKfb
+        }
+        False {
+            Write-Output "[WARNING] Egnyte is not connected to Z:\, folder sync cannot proceed. Quitting."
+        }
+    }
+}
+else {
+    Write-Output "[WARNING] Egnyte Desktop is not installed. Quitting."
+}
