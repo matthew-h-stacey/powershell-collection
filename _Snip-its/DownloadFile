@@ -1,6 +1,5 @@
-$Url = "https://download.advanced-ip-scanner.com/download/files/Advanced_IP_Scanner_2.5.4594.1.exe"
+$Url = "https://portableapps.com/redir2/?a=FirefoxPortable&s=s&d=pa&f=FirefoxPortable_120.0.1_English.paf.exe"
 $LocalPath = "C:\TempPath"
-$FileName = "Advanced_IP_Scanner_2.5.4594.1.exe"
-
+$FileName = "FirefoxPortable_120.0.1_English.paf.exe"
 $FilePath = "$LocalPath\$FileName"
 (New-Object System.Net.WebClient).DownloadFile($Url, $FilePath)

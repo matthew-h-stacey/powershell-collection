@@ -15,4 +15,4 @@
 
 #>
 
-Add-Computer -WorkGroupName "Changeme-AZUREAD"
+Add-Computer -WorkGroupName "CLIENT-AZUREAD"

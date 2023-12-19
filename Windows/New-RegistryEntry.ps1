@@ -49,7 +49,7 @@ foreach ($User in $Users) {
     $UserKey = $User.Name
 
     $params = @{
-        Path  = "Registry::$UserKey\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot"
+        Path  = "Registry::$UserKey\Policies\Microsoft\Windows\WindowsCopilot"
         Type  = "DWORD"
         Name  = "TurnOffWindowsCopilot"
         Value = "1"
