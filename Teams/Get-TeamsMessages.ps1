@@ -52,4 +52,4 @@ do {
 
 # Format and output the chat messages
 $Chats = $MSGraphOutput |  Select-Object  @{Name = "Sent"; Expression = { Get-Date $_.createdDateTime -Format "MM/dd/yyyy HH:mm:ss " } }, @{Name = "From"; Expression = { $_.from.user.displayName } }, @{Name = "Content"; Expression = { $_.body.content } }, @{Name = "ReplyContent"; Expression = { $_.attachments.content } }#| Export-Csv "$PSScriptRoot\ExportedChats.csv" -Append
-$chats | export-csv C:\TempPath\test.csv -NoTypeInformation
+$chats | export-csv C:\TempPath\TeamsChatExport_$UserPrincipalName.csv -NoTypeInformation
