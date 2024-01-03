@@ -1,3 +1,8 @@
+# TO DO
+# - Add support for multiple aliases
+# - Add support for adding groups via CSV ..?
+
+
 [CmdletBinding()]
 param (
     # User's first name
@@ -45,7 +50,7 @@ param (
     [String]
     $EmailAddress,
 
-    # User's alias (smtp:{$Alias})
+    # User's alias (smtp:{$Alias}). Supports either a single string or multiple aliases separated by a semicolon (;)
     [Parameter(Mandatory = $false)]
     [String]
     $Alias,
@@ -73,7 +78,7 @@ param (
     # User's zip code. Note: Excel might drop leading zero's in the zip code if the cell isn't formatted properly
     [Parameter(Mandatory = $false)]
     [String]
-    $ZipCode,
+    $postalCode,
 
     # User's two-digit country code (ex: US)
     [Parameter(Mandatory = $false)]
@@ -83,7 +88,7 @@ param (
     # User's cellphone or mobile number
     [Parameter(Mandatory = $false)]
     [String]
-    $Cell,
+    $Mobile,
 
     # User's fax number
     [Parameter(Mandatory = $false)]
@@ -112,6 +117,7 @@ param (
 )
 
 function Find-AdUser {
+    # Searches for an AdUser with a UPN, DisplayName, or samAccount name. This allows the input to be more flexible than just using Get-AdUser
 
     param (
 
@@ -165,8 +171,8 @@ function Find-AdUser {
     return $User
 
 }
-
 function Copy-AdGroupMembership {
+    # Copies the AdUser group membership from one user to another
     # Example: Copy-AdGroupMembership -Identity jsmith@contoso.com -User aapple@contoso.com
 
     param (
@@ -190,10 +196,9 @@ function Copy-AdGroupMembership {
         try {
             if ( $Group -notin $CurrentMembership ) {
                 Add-ADGroupMember -Identity $Group -Members $User
-                Write-output "[INFO] Added $User to group: $Group"
             }
             else {
-                Write-output "[INFO] Skipped ${Group}: $User is already a member"   
+                # Skip - User is already a member
             }
         }
         catch {
@@ -201,10 +206,146 @@ function Copy-AdGroupMembership {
         }
     
     }
-    Write-Output "[INFO] No more groups to process"
 }   
+function Set-ADUserAliases {
+    # Sets the PrimarySmtpAddress and any aliases on an AdUser
+    param (
+        # Identity of the user to set the aliases on
+        [Parameter(Mandatory = $true)]
+        [String]
+        $Identity,
 
-### Construct base parameters from the input file
+        # User's primary email address (EmailAddress, SMTP:$EmailAddress)
+        [Parameter(Mandatory = $true)]
+        [String]
+        $PrimarySmtpAddress,
+
+        # User's alias (smtp:{$Alias})
+        [Parameter(Mandatory = $true)]
+        [String[]]
+        $Aliases
+    )
+
+    # Add the PrimarySmtpAddress (SMTP) to the proxyAddresses property
+    $EmailSMTP = "SMTP:" + $PrimarySmtpAddress
+    Set-ADUser -Identity $Identity -Add @{proxyAddresses = $EmailSMTP }
+
+    # Add any aliases (smtp) to the proxyAddresses property
+    $Aliases | ForEach-Object { 
+        $AliasSMTP = "smtp:" + $_
+        Set-ADUser -Identity $Identity -Add @{proxyAddresses = $AliasSMTP }
+    }
+
+}
+
+function Output-UserProperties {
+    param (
+        # Identity of the user to export
+        [Parameter(Mandatory = $true)]
+        [String]
+        $Identity,
+
+        # Output directory
+        [Parameter(Mandatory = $true)]
+        [String]
+        $OutputPath
+    )
+
+    $Properties = @(
+        'GivenName',
+        'Surname',
+        'DisplayName',
+        'SamAccountName',
+        'UserPrincipalName',
+        'PasswordExpired',
+        'Enabled',
+        'Mail',
+        'ProxyAddresses',
+        'Office',
+        'StreetAddress',
+        'City',
+        'State',
+        'postalCode',
+        'Country',
+        'Mobile',
+        'Fax',
+        'Title',
+        'Department',
+        'Manager',
+        'Company',
+        'DistinguishedName',
+        'MemberOf'
+    )
+
+    # Retrieve the user object for export
+    $AdUser = Get-AdUser -Identity $Identity -Properties $Properties | Select-Object $Properties
+
+    # Create an empty array for aliases. Pull proxy addresses that contain "smtp" and then combine into a single comma-separated string
+    $Aliases = @()
+    $AdUser.proxyAddresses | ForEach-Object {
+        if ( $_ -cmatch "smtp") {
+            $Aliases += $_.split(":")[1]
+        }
+    }
+    $Aliases = $Aliases -join ", "
+
+    # Create an empty array for groups. Grab only the group's display name, sort them, then combine into a single comma-separated string
+    $Groups = @()
+    $AdUser.MemberOf | ForEach-Object {
+        $Groups += ((($_ -split ",", 2)[0]) -split "=")[1] 
+    }
+    $Groups = ($Groups | Sort-Object) -join ", " 
+
+    # Create a PsCustomObject for the output and send it to OutputPath
+    $Output = [PsCustomObject]@{
+        FirstName             = $AdUser.GivenName
+        LastName              = $AdUser.Surname
+        DisplayName           = $AdUser.DisplayName
+        SamAccountName        = $AdUser.SamAccountName
+        UserPrincipalName     = $AdUser.UserPrincipalName
+        ChangePasswordAtLogon = $AdUser.PasswordExpired
+        Enabled               = $AdUser.Enabled
+        Path                  = (($AdUser).DistinguishedName -split ",", 2)[1]
+        EmailAddress          = $AdUser.Mail
+        Aliases               = $Aliases
+        Office                = $AdUser.Office
+        StreetAddress         = $AdUser.StreetAddress
+        City                  = $AdUser.City
+        State                 = $AdUser.State
+        postalCode            = $AdUser.postalCode
+        Country               = $AdUser.Country
+        Mobile                = $AdUser.Mobile
+        Fax                   = $AdUser.Fax
+        Title                 = $AdUser.Title
+        Department            = $AdUser.Department
+        Manager               = $AdUser.Manager
+        Company               = $AdUser.Company
+        Groups                = $Groups
+    }
+    New-Folder -Path $OutputPath
+    $Output | Out-File $OutputPath\$($Identity)_output.txt
+    Write-Host "[INFO] Exported user property output to $($OutputPath)\$($Identity)_output.txt"
+
+}
+
+function New-Folder {
+    Param([Parameter(Mandatory = $True)][String] $Path)
+    if (-not (Test-Path -LiteralPath $Path)) {
+        try {
+            New-Item -Path $Path -ItemType Directory -ErrorAction Stop | Out-Null
+            Write-Host "Created folder: $Path"
+        }
+        catch {
+            Write-Error -Message "Unable to create directory '$Path'. Error was: $_" -ErrorAction Stop
+        }
+    }
+    else {
+        # Path already exists, continue
+    }
+
+}
+
+### Start constructing params with the base parameters from the input file
 $params = @{
     GivenName             = $FirstName
     Surname               = $LastName
@@ -216,49 +357,22 @@ $params = @{
     Enabled               = $Enabled
     AccountPassword       = (Read-Host -AsSecureString -Prompt "Enter $($UserPrincipalName)'s password")
 }
-# Add all of the optional parameters, if present. Note: If CopyUser is provided the new user will use the copied values (ex: City/State/etc.) UNLESS overriden by a different value in the corresponding optional field
-if ( $EmailAddress ) {
-    $params.EmailAddress = $EmailAddress
+# Add the optional properties that are a one-to-one property match
+$optionalProperties = @('EmailAddress', 'Office', 'StreetAddress', 'City', 'State', 'postalCode', 'Country', 'Mobile', 'Fax', 'Title', 'Department', 'Company')
+$optionalProperties | ForEach-Object {
+    $Value = Get-Variable -Name $_ -ErrorAction SilentlyContinue -ValueOnly
+    if ( $Value ) {
+        $params.$_ = $Value
+    }
 }
-if ( $Office ) {
-    $params.Office = $Office
-}
-if ( $StreetAddress ) {
-    $params.StreetAddress = $StreetAddress
-}
-if ( $City ) {
-    $params.l = $City
-}
-if ( $State ) {
-    $params.State = $State
-}
-if ( $ZipCode ) {
-    $params.postalCode = $ZipCode
-}
-if ( $Country ) {
-    $params.Country = $Country
-}
-if ( $Cell ) {
-    $params.mobile = $Cell
-}
-if ( $Fax ) {
-    $params.Fax = $Fax
-}
-if ( $Title ) {
-    $params.Title = $Title
-}
-if ( $Department ) {
-    $params.Department = $Department
-}
+# Add the user's manager
 if ( $Manager ) {
     $params.Manager = (Find-AdUser -Identity $Manager).SamAccountName
 }
-if ( $Company ) {
-    $params.Company = $Company
-}
 
+# If a user was provided in the CopyUser section of the CSV, locate the user by UPN/SamAccountName/DisplayName and provide the user object as the Instance parameter
+# This will be used to copy AdUser group memberships and properties. Note: The new user will use the copied values (ex: City/State/etc.) UNLESS overriden by a different value in the corresponding optional field
 if ( $CopyUser ) {
-    # If a user was provided in the CopyUser section of the CSV, locate the user by UPN/SamAccountName/DisplayName and provide the user object as the Instance parameter
     $Properties = @(
         'City',
         'Company',
@@ -274,8 +388,8 @@ if ( $CopyUser ) {
     )
     $UserToCopy = Find-AdUser -Identity $CopyUser -Properties $Properties -ErrorAction Stop
     if ($UserToCopy) {
-        $params.Instance = $UserToCopy
-        $params.Path = ($UserToCopy.DistinguishedName -split ",", 2)[1]
+        $params.Instance = $UserToCopy # Instance is the parameter in Set-AdUser which take an existing AdUser object as input
+        $params.Path = ($UserToCopy.DistinguishedName -split ",", 2)[1] # This pulls just the target OU path of the user being copied so the new user is created in the same OU
     }
     else {
         Write-Output "[ERROR] A user to copy (CopyUser) was provided in the input, but the user could not be found. Exiting script."
@@ -306,10 +420,12 @@ catch {
 
 # Set the user's PrimarySmtpAddress and alias
 if ( $Alias ) {
-    $EmailSMTP = "SMTP:" + $EmailAddress
-    $AliasSMTP = "smtp:" + $Alias
-    Set-ADUser -Identity $SamAccountName -Add @{proxyAddresses = $EmailSMTP }
-    Set-ADUser -Identity $SamAccountName -Add @{proxyAddresses = $AliasSMTP }
+    # Create an array from $Aliases, splitting by a semicolon
+    $Aliases = $Alias.Split(";")
+
+    # Run the function to set both the PrimarySmtpAddress and any aliases
+    Set-ADUserAliases -Identity $SamAccountName -PrimarySmtpAddress $EmailAddress -Aliases $Aliases
+
 }
 
 # Copy group membership
@@ -317,6 +433,4 @@ if ( $CopyUser ) {
     Copy-AdGroupMembership -Identity $UserToCopy.SamAccountName -User $params.SamAccountName
 }
 
-
-
-
+Output-UserProperties -Identity $SamAccountName -OutputPath C:\Scripts

@@ -1,3 +1,8 @@
+# TO DO
+# - Add support for multiple aliases
+# - Add support for adding groups via CSV ..?
+
+
 [CmdletBinding()]
 param (
     # User's first name
@@ -45,7 +50,7 @@ param (
     [String]
     $EmailAddress,
 
-    # User's alias (smtp:{$Alias})
+    # User's alias (smtp:{$Alias}). Supports either a single string or multiple aliases separated by a semicolon (;)
     [Parameter(Mandatory = $false)]
     [String]
     $Alias,
@@ -73,7 +78,7 @@ param (
     # User's zip code. Note: Excel might drop leading zero's in the zip code if the cell isn't formatted properly
     [Parameter(Mandatory = $false)]
     [String]
-    $ZipCode,
+    $postalCode,
 
     # User's two-digit country code (ex: US)
     [Parameter(Mandatory = $false)]
@@ -112,6 +117,7 @@ param (
 )
 
 function Find-AdUser {
+    # Searches for an AdUser with a UPN, DisplayName, or samAccount name. This allows the input to be more flexible than just using Get-AdUser
 
     param (
 
@@ -167,6 +173,7 @@ function Find-AdUser {
 }
 
 function Copy-AdGroupMembership {
+    # Copies the AdUser group membership from one user to another
     # Example: Copy-AdGroupMembership -Identity jsmith@contoso.com -User aapple@contoso.com
 
     param (
@@ -203,6 +210,36 @@ function Copy-AdGroupMembership {
     }
     Write-Output "[INFO] No more groups to process"
 }   
+function Set-ADUserAliases {
+    # Sets the PrimarySmtpAddress and any aliases on an AdUser
+    param (
+        # Identity of the user to set the aliases on
+        [Parameter(Mandatory = $true)]
+        [String]
+        $Identity,
+
+        # User's primary email address (EmailAddress, SMTP:$EmailAddress)
+        [Parameter(Mandatory = $true)]
+        [String]
+        $PrimarySmtpAddress,
+
+        # User's alias (smtp:{$Alias})
+        [Parameter(Mandatory = $true)]
+        [String[]]
+        $Aliases
+    )
+
+    # Add the PrimarySmtpAddress (SMTP) to the proxyAddresses property
+    $EmailSMTP = "SMTP:" + $PrimarySmtpAddress
+    Set-ADUser -Identity $Identity -Add @{proxyAddresses = $EmailSMTP }
+
+    # Add any aliases (smtp) to the proxyAddresses property
+    $Aliases | ForEach-Object { 
+        $AliasSMTP = "smtp:" + $_
+        Set-ADUser -Identity $Identity -Add @{proxyAddresses = $AliasSMTP }
+    }
+
+}
 
 ### Construct base parameters from the input file
 $params = @{
@@ -227,13 +264,13 @@ if ( $StreetAddress ) {
     $params.StreetAddress = $StreetAddress
 }
 if ( $City ) {
-    $params.l = $City
+    $params.City = $City
 }
 if ( $State ) {
     $params.State = $State
 }
-if ( $ZipCode ) {
-    $params.postalCode = $ZipCode
+if ( $postalCode ) {
+    $params.postalCode = $postalCode
 }
 if ( $Country ) {
     $params.Country = $Country
@@ -274,8 +311,8 @@ if ( $CopyUser ) {
     )
     $UserToCopy = Find-AdUser -Identity $CopyUser -Properties $Properties -ErrorAction Stop
     if ($UserToCopy) {
-        $params.Instance = $UserToCopy
-        $params.Path = ($UserToCopy.DistinguishedName -split ",", 2)[1]
+        $params.Instance = $UserToCopy # Instance is the parameter in Set-AdUser which take an existing AdUser object as input
+        $params.Path = ($UserToCopy.DistinguishedName -split ",", 2)[1] # This pulls just the target OU path of the user being copied so the new user is created in the same OU
     }
     else {
         Write-Output "[ERROR] A user to copy (CopyUser) was provided in the input, but the user could not be found. Exiting script."
@@ -306,17 +343,15 @@ catch {
 
 # Set the user's PrimarySmtpAddress and alias
 if ( $Alias ) {
-    $EmailSMTP = "SMTP:" + $EmailAddress
-    $AliasSMTP = "smtp:" + $Alias
-    Set-ADUser -Identity $SamAccountName -Add @{proxyAddresses = $EmailSMTP }
-    Set-ADUser -Identity $SamAccountName -Add @{proxyAddresses = $AliasSMTP }
+    # Create an array from $Aliases, splitting by a semicolon
+    $Aliases = $Alias.Split(";")
+
+    # Run the function to set both the PrimarySmtpAddress and any aliases
+    Set-ADUserAliases -Identity $SamAccountName -PrimarySmtpAddress $EmailAddress -Aliases $Aliases
+
 }
 
 # Copy group membership
 if ( $CopyUser ) {
     Copy-AdGroupMembership -Identity $UserToCopy.SamAccountName -User $params.SamAccountName
 }
-
-
-
-
