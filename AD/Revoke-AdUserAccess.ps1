@@ -81,26 +81,33 @@ function Clear-AdGroupMembership {
     $CurrentMembership = Find-AdUser -Identity $Identity -Properties MemberOf | Select-Object -ExpandProperty MemberOf 
 
     $Groups = @()
-    $CurrentMembership | ForEach-Object {
-        try {
-            Remove-ADGroupMember -Identity $_ -Members $Identity -Confirm:$false
-            $GroupName = ((($_ -split ",", 2)[0]) -split "=")[1]
-            $Groups += $GroupName
+    
+    if ( $CurrentMembership -gt 0) {
+
+        $CurrentMembership | ForEach-Object {
+            try {
+                Remove-ADGroupMember -Identity $_ -Members $Identity -Confirm:$false
+                $GroupName = ((($_ -split ",", 2)[0]) -split "=")[1]
+                $Groups += $GroupName
+            }
+            catch {
+                Write-Output "[ERROR] Failed to remove user from $GroupName. Error: $($_.Exception.Message)"
+            }
         }
-        catch {
-            Write-Output "[ERROR] Failed to remove user from $GroupName. Error: $($_.Exception.Message)"
-        }
+        $Groups = ($Groups | Sort-Object) -join ", "
+        Write-Output "[INFO] Removed user from groups: $Groups"
     }
-    $Groups = ($Groups | Sort-Object) -join ", "
-    Write-Output "[INFO] Removed user from groups: $Groups"
+    else {
+        Write-Output "[INFO] User is not a part of any groups, no memberships to remove"   
+    }
 
 }
 
-$Input = Read-Host "Enter the name of a user to terminate"
-$User = Find-AdUser -Identity $Input
+$UserInput = Read-Host "Enter the name of a user to terminate"
+$User = Find-AdUser -Identity $UserInput
 
 if ( !$User ) {
-    Write-Output "[ERROR] Unable to locate user with input: $Input. Exiting script"
+    Write-Output "[ERROR] Unable to locate user with input: $UserInput. Exiting script"
     exit 1
 }
 else {
@@ -133,7 +140,7 @@ catch {
 }
 
 # Locate the non-synced OU the user should be moved to
-$NonSyncedUsersOU = Get-ADOrganizationalUnit -Filter * | ? { $_.DistinguishedName -like "OU=Users,OU=AAD Excluded,DC=*" }
+$NonSyncedUsersOU = Get-ADOrganizationalUnit -Filter * | Where-Object { $_.DistinguishedName -like "OU=Users,OU=AAD Excluded,DC=*" }
 $TargetPath = $NonSyncedUsersOU.DistinguishedName
 
 
