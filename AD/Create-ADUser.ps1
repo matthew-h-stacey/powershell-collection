@@ -238,7 +238,7 @@ function Set-ADUserAliases {
 
 }
 
-function Output-UserProperties {
+function Export-UserProperties {
     param (
         # Identity of the user to export
         [Parameter(Mandatory = $true)]
@@ -433,4 +433,4 @@ if ( $CopyUser ) {
     Copy-AdGroupMembership -Identity $UserToCopy.SamAccountName -User $params.SamAccountName
 }
 
-Output-UserProperties -Identity $SamAccountName -OutputPath C:\Scripts
+Export-UserProperties -Identity $SamAccountName -OutputPath C:\Scripts
