@@ -1,5 +1,4 @@
 # TO DO
-# - Add support for multiple aliases
 # - Add support for adding groups via CSV ..?
 
 
@@ -116,8 +115,8 @@ param (
     $Company
 )
 
-function Find-AdUser {
-    # Searches for an AdUser with a UPN, DisplayName, or samAccount name. This allows the input to be more flexible than just using Get-AdUser
+function Find-ADUser {
+    # Searches for an ADUser with a UPN, DisplayName, or samAccount name. This allows the input to be more flexible than just using Get-ADUser
 
     param (
 
@@ -142,19 +141,19 @@ function Find-AdUser {
     if ($Identity -match '@') {
         # Identity contains '@', consider it as UPN
         if ( $Properties ) {
-            $User = Get-AdUser -Filter { UserPrincipalName -eq $Identity } -Properties $Properties
+            $User = Get-ADUser -Filter { UserPrincipalName -eq $Identity } -Properties $Properties
         }
         else {
-            $User = Get-AdUser -Filter { UserPrincipalName -eq $Identity }
+            $User = Get-ADUser -Filter { UserPrincipalName -eq $Identity }
         }
     }
     else {
         # Try to get the user by samAccountName or DisplayName
         if ( $Properties ) {
-            $User = Get-AdUser -Filter { samAccountName -eq $Identity -or DisplayName -eq $Identity } -Properties $Properties
+            $User = Get-ADUser -Filter { samAccountName -eq $Identity -or DisplayName -eq $Identity } -Properties $Properties
         }
         else {
-            $User = Get-AdUser -Filter { samAccountName -eq $Identity -or DisplayName -eq $Identity }
+            $User = Get-ADUser -Filter { samAccountName -eq $Identity -or DisplayName -eq $Identity }
         }
     }
 
@@ -171,9 +170,9 @@ function Find-AdUser {
     return $User
 
 }
-function Copy-AdGroupMembership {
-    # Copies the AdUser group membership from one user to another
-    # Example: Copy-AdGroupMembership -Identity jsmith@contoso.com -User aapple@contoso.com
+function Copy-ADGroupMembership {
+    # Copies the ADUser group membership from one user to another
+    # Example: Copy-ADGroupMembership -Identity jsmith@contoso.com -User aapple@contoso.com
 
     param (
         # The source user to copy membership from
@@ -189,8 +188,8 @@ function Copy-AdGroupMembership {
 
     # Copies AD group membership from source user to destination user
     Write-Output "[INFO] Matching Active Directory group membership from $Identity to $User"
-    $CurrentMembership = Find-AdUser -Identity $User -Properties MemberOf | Select-Object -ExpandProperty MemberOf
-    $Groups = Find-AdUser -Identity $Identity -Properties MemberOf | Select-Object -ExpandProperty MemberOf
+    $CurrentMembership = Find-ADUser -Identity $User -Properties MemberOf | Select-Object -ExpandProperty MemberOf
+    $Groups = Find-ADUser -Identity $Identity -Properties MemberOf | Select-Object -ExpandProperty MemberOf
 
     foreach ( $Group in $Groups ) {
         try {
@@ -208,7 +207,7 @@ function Copy-AdGroupMembership {
     }
 }   
 function Set-ADUserAliases {
-    # Sets the PrimarySmtpAddress and any aliases on an AdUser
+    # Sets the PrimarySmtpAddress and any aliases on an ADUser
     param (
         # Identity of the user to set the aliases on
         [Parameter(Mandatory = $true)]
@@ -278,11 +277,11 @@ function Export-UserProperties {
     )
 
     # Retrieve the user object for export
-    $AdUser = Get-AdUser -Identity $Identity -Properties $Properties | Select-Object $Properties
+    $ADUser = Get-ADUser -Identity $Identity -Properties $Properties | Select-Object $Properties
 
     # Create an empty array for aliases. Pull proxy addresses that contain "smtp" and then combine into a single comma-separated string
     $Aliases = @()
-    $AdUser.proxyAddresses | ForEach-Object {
+    $ADUser.proxyAddresses | ForEach-Object {
         if ( $_ -cmatch "smtp") {
             $Aliases += $_.split(":")[1]
         }
@@ -291,35 +290,35 @@ function Export-UserProperties {
 
     # Create an empty array for groups. Grab only the group's display name, sort them, then combine into a single comma-separated string
     $Groups = @()
-    $AdUser.MemberOf | ForEach-Object {
+    $ADUser.MemberOf | ForEach-Object {
         $Groups += ((($_ -split ",", 2)[0]) -split "=")[1] 
     }
     $Groups = ($Groups | Sort-Object) -join ", " 
 
     # Create a PsCustomObject for the output and send it to OutputPath
     $Output = [PsCustomObject]@{
-        FirstName             = $AdUser.GivenName
-        LastName              = $AdUser.Surname
-        DisplayName           = $AdUser.DisplayName
-        SamAccountName        = $AdUser.SamAccountName
-        UserPrincipalName     = $AdUser.UserPrincipalName
-        ChangePasswordAtLogon = $AdUser.PasswordExpired
-        Enabled               = $AdUser.Enabled
-        Path                  = (($AdUser).DistinguishedName -split ",", 2)[1]
-        EmailAddress          = $AdUser.Mail
+        FirstName             = $ADUser.GivenName
+        LastName              = $ADUser.Surname
+        DisplayName           = $ADUser.DisplayName
+        SamAccountName        = $ADUser.SamAccountName
+        UserPrincipalName     = $ADUser.UserPrincipalName
+        ChangePasswordAtLogon = $ADUser.PasswordExpired
+        Enabled               = $ADUser.Enabled
+        Path                  = (($ADUser).DistinguishedName -split ",", 2)[1]
+        EmailAddress          = $ADUser.Mail
         Aliases               = $Aliases
-        Office                = $AdUser.Office
-        StreetAddress         = $AdUser.StreetAddress
-        City                  = $AdUser.City
-        State                 = $AdUser.State
-        postalCode            = $AdUser.postalCode
-        Country               = $AdUser.Country
-        Mobile                = $AdUser.Mobile
-        Fax                   = $AdUser.Fax
-        Title                 = $AdUser.Title
-        Department            = $AdUser.Department
-        Manager               = $AdUser.Manager
-        Company               = $AdUser.Company
+        Office                = $ADUser.Office
+        StreetAddress         = $ADUser.StreetADdress
+        City                  = $ADUser.City
+        State                 = $ADUser.State
+        postalCode            = $ADUser.postalCode
+        Country               = $ADUser.Country
+        Mobile                = $ADUser.Mobile
+        Fax                   = $ADUser.Fax
+        Title                 = $ADUser.Title
+        Department            = $ADUser.Department
+        Manager               = $ADUser.Manager
+        Company               = $ADUser.Company
         Groups                = $Groups
     }
     New-Folder -Path $OutputPath
@@ -367,11 +366,11 @@ $optionalProperties | ForEach-Object {
 }
 # Add the user's manager
 if ( $Manager ) {
-    $params.Manager = (Find-AdUser -Identity $Manager).SamAccountName
+    $params.Manager = (Find-ADUser -Identity $Manager).SamAccountName
 }
 
 # If a user was provided in the CopyUser section of the CSV, locate the user by UPN/SamAccountName/DisplayName and provide the user object as the Instance parameter
-# This will be used to copy AdUser group memberships and properties. Note: The new user will use the copied values (ex: City/State/etc.) UNLESS overriden by a different value in the corresponding optional field
+# This will be used to copy ADUser group memberships and properties. Note: The new user will use the copied values (ex: City/State/etc.) UNLESS overriden by a different value in the corresponding optional field
 if ( $CopyUser ) {
     $Properties = @(
         'City',
@@ -386,9 +385,9 @@ if ( $CopyUser ) {
         'StreetAddress',
         'Title'
     )
-    $UserToCopy = Find-AdUser -Identity $CopyUser -Properties $Properties -ErrorAction Stop
+    $UserToCopy = Find-ADUser -Identity $CopyUser -Properties $Properties -ErrorAction Stop
     if ($UserToCopy) {
-        $params.Instance = $UserToCopy # Instance is the parameter in Set-AdUser which take an existing AdUser object as input
+        $params.Instance = $UserToCopy # Instance is the parameter in Set-ADUser which take an existing ADUser object as input
         $params.Path = ($UserToCopy.DistinguishedName -split ",", 2)[1] # This pulls just the target OU path of the user being copied so the new user is created in the same OU
     }
     else {
@@ -430,7 +429,7 @@ if ( $Alias ) {
 
 # Copy group membership
 if ( $CopyUser ) {
-    Copy-AdGroupMembership -Identity $UserToCopy.SamAccountName -User $params.SamAccountName
+    Copy-ADGroupMembership -Identity $UserToCopy.SamAccountName -User $params.SamAccountName
 }
 
 Export-UserProperties -Identity $SamAccountName -OutputPath C:\Scripts

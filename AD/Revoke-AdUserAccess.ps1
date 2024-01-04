@@ -1,5 +1,12 @@
-function Find-AdUser {
-    # Searches for an AdUser with a UPN, DisplayName, or samAccount name. This allows the input to be more flexible than just using Get-AdUser
+param (
+    # Switch to use when the environment is hybrid AD and the user needs to be disconnected from a cloud object
+    [Parameter(Mandatory=$false)]
+    [Switch]
+    $Hybrid
+)
+
+function Find-ADUser {
+    # Searches for an ADUser with a UPN, DisplayName, or samAccount name. This allows the input to be more flexible than just using Get-ADUser
 
     param (
 
@@ -24,19 +31,19 @@ function Find-AdUser {
     if ($Identity -match '@') {
         # Identity contains '@', consider it as UPN
         if ( $Properties ) {
-            $User = Get-AdUser -Filter { UserPrincipalName -eq $Identity } -Properties $Properties
+            $User = Get-ADUser -Filter { UserPrincipalName -eq $Identity } -Properties $Properties
         }
         else {
-            $User = Get-AdUser -Filter { UserPrincipalName -eq $Identity }
+            $User = Get-ADUser -Filter { UserPrincipalName -eq $Identity }
         }
     }
     else {
         # Try to get the user by samAccountName or DisplayName
         if ( $Properties ) {
-            $User = Get-AdUser -Filter { samAccountName -eq $Identity -or DisplayName -eq $Identity } -Properties $Properties
+            $User = Get-ADUser -Filter { samAccountName -eq $Identity -or DisplayName -eq $Identity } -Properties $Properties
         }
         else {
-            $User = Get-AdUser -Filter { samAccountName -eq $Identity -or DisplayName -eq $Identity }
+            $User = Get-ADUser -Filter { samAccountName -eq $Identity -or DisplayName -eq $Identity }
         }
     }
 
@@ -68,8 +75,8 @@ function Get-RandomPassword {
     
 }
 
-function Clear-AdGroupMembership {
-    # Remove an AdUser account from all AdGroups that they are currently members of
+function Clear-ADGroupMembership {
+    # Remove an ADUser account from all ADGroups that they are currently members of
 
     param (
         # The source user to copy membership from
@@ -78,7 +85,7 @@ function Clear-AdGroupMembership {
         $Identity
     )
 
-    $CurrentMembership = Find-AdUser -Identity $Identity -Properties MemberOf | Select-Object -ExpandProperty MemberOf 
+    $CurrentMembership = Find-ADUser -Identity $Identity -Properties MemberOf | Select-Object -ExpandProperty MemberOf 
 
     $Groups = @()
     
@@ -104,7 +111,7 @@ function Clear-AdGroupMembership {
 }
 
 $UserInput = Read-Host "Enter the name of a user to terminate"
-$User = Find-AdUser -Identity $UserInput
+$User = Find-ADUser -Identity $UserInput
 
 if ( !$User ) {
     Write-Output "[ERROR] Unable to locate user with input: $UserInput. Exiting script"
@@ -139,26 +146,28 @@ catch {
     exit 1    
 }
 
-# Locate the non-synced OU the user should be moved to
-$NonSyncedUsersOU = Get-ADOrganizationalUnit -Filter * | Where-Object { $_.DistinguishedName -like "OU=Users,OU=AAD Excluded,DC=*" }
-$TargetPath = $NonSyncedUsersOU.DistinguishedName
+if ( $Hybrid ) {
+    # Locate the non-synced OU the user should be moved to
+    $NonSyncedUsersOU = Get-ADOrganizationalUnit -Filter * | Where-Object { $_.DistinguishedName -like "OU=Users,OU=AAD Excluded,DC=*" }
+    $TargetPath = $NonSyncedUsersOU.DistinguishedName
 
 
-if (!($User.DistinguishedName -match $TargetPath)) {
-    if ( $NonSyncedUsersOU.DistinguishedName.Count -eq 1 ) {
-        try {
-            
-            Move-ADObject -Identity $User.DistinguishedName -TargetPath $TargetPath 
-            Write-Output "[INFO] Moved user to OU: $TargetPath"
-        }
-        catch {
-            Write-Output "[ERROR] Unable to move user to $TargetPath. Error: $($_.Exception.Message)"
-            exit 1    
+    if (!($User.DistinguishedName -match $TargetPath)) {
+        if ( $NonSyncedUsersOU.DistinguishedName.Count -eq 1 ) {
+            try {
+                
+                Move-ADObject -Identity $User.DistinguishedName -TargetPath $TargetPath 
+                Write-Output "[INFO] Moved user to OU: $TargetPath"
+            }
+            catch {
+                Write-Output "[ERROR] Unable to move user to $TargetPath. Error: $($_.Exception.Message)"
+                exit 1    
+            }
         }
     }
-}
-else {
-    Write-Output "[INFO] User is already in the AAD Excluded users OU"
+    else {
+        Write-Output "[INFO] User is already in the AAD Excluded users OU"
+    }
 }
 
-Clear-AdGroupMembership -Identity $User.SamAccountName
+Clear-ADGroupMembership -Identity $User.SamAccountName
