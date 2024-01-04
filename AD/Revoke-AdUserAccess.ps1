@@ -149,24 +149,31 @@ catch {
 if ( $Hybrid ) {
     # Locate the non-synced OU the user should be moved to
     $NonSyncedUsersOU = Get-ADOrganizationalUnit -Filter * | Where-Object { $_.DistinguishedName -like "OU=Users,OU=AAD Excluded,DC=*" }
-    $TargetPath = $NonSyncedUsersOU.DistinguishedName
 
-
-    if (!($User.DistinguishedName -match $TargetPath)) {
-        if ( $NonSyncedUsersOU.DistinguishedName.Count -eq 1 ) {
-            try {
-                
-                Move-ADObject -Identity $User.DistinguishedName -TargetPath $TargetPath 
-                Write-Output "[INFO] Moved user to OU: $TargetPath"
-            }
-            catch {
-                Write-Output "[ERROR] Unable to move user to $TargetPath. Error: $($_.Exception.Message)"
-                exit 1    
-            }
-        }
+    if ( !($NonSyncedUsersOU) ) {
+        # Warn if the OU can't be located
+        Write-Output "[WARNING] Unable to locate the proper non-synced OU to move the user to (OU=Users,OU=AAD Excluded,DC=*). Moving the user to this OU ensures that the cloud sync between the on-prem and cloud object will be broken. This is necessary to manage the termed account as a cloud-only object. Please ensure the OU is created and run the script against the user again."
     }
     else {
-        Write-Output "[INFO] User is already in the AAD Excluded users OU"
+        # Continue if the OU is located
+        $TargetPath = $NonSyncedUsersOU.DistinguishedName
+        if ( !($User.DistinguishedName -match $TargetPath) ) {
+            # If the user is not in TargetPath
+            if ( $NonSyncedUsersOU.DistinguishedName.Count -eq 1 ) {
+                # If only one OU is located
+                try {
+                    Move-ADObject -Identity $User.DistinguishedName -TargetPath $TargetPath 
+                    Write-Output "[INFO] Moved user to OU: $TargetPath"
+                }
+                catch {
+                    Write-Output "[ERROR] Unable to move user to $TargetPath. Error: $($_.Exception.Message)"
+                    exit 1    
+                }
+            }
+        }
+        else {
+            Write-Output "[INFO] User is already in the AAD Excluded users OU"
+        }
     }
 }
 
