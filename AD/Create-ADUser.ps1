@@ -1,6 +1,29 @@
-# TO DO
-# - Add support for adding groups via CSV ..?
+<#
+.SYNOPSIS
+Script to create Active Directory user accounts.
 
+.DESCRIPTION
+This script combines a few functions to to easily create new Active Directory user accounts in bulk, with the primary method being a CSV filled out with the required properties.
+The CSV is imported and then run against a foreach loop to pass all the inputted information to the proper parameters.
+
+.\Create-ADUser_execute.ps1 - Helpful pre-created execution script to import a CSV and run the script
+.\Create-ADUser_template.csv - Template file for entering user properties into
+
+.PARAMETER (ALL)
+Each parameter should be fairly self explanatory as they correlate to an Active Directory user object. Each parameter below has a note preceding it which explains what it is.
+Given the amount of parameters in this script it would be excessive to list a description for each of them separately in this notes block.
+
+.NOTES
+Author: Matt Stacey
+Date:   December 27, 2023
+
+To do:
+[ ] Fix issue with script failing to create a user if NOT copying a user (ex: $CopyUser is not provided). Needs more testing
+[ ] Add additional fields: Description, Home phone, Pager phone, IP phone, EmployeeID
+[ ] Incorporate Get-CultureInfoList.ps1 (new) to parse $Country into a ISO 3166 two-letter country code
+[X] Remove trailing spaces from input - Handled via the execution script
+
+#>
 
 [CmdletBinding()]
 param (
@@ -40,7 +63,7 @@ param (
     $Enabled,
 
     # To copy properties and group membership from an existing user, enter the source user's SamAccountName/UserPrincipalName/DisplayName
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $false)]
     [String]
     $CopyUser,
 
@@ -54,7 +77,7 @@ param (
     [String]
     $Alias,
 
-    # User's office number
+    # User's office number (physicalDeliveryOfficeName or physical office name/number, not an office phone number)
     [Parameter(Mandatory = $false)]
     [String]
     $Office,
@@ -159,7 +182,11 @@ function Find-ADUser {
 
     if ( !$User ) {
         Write-Output "[ERROR] Unable to locate a user with provided input: $Identity. Please verify that you entered the correct samAccountName/DisplayName/UserPrincipalName of an existing user and try again."
-        break
+        exit 1
+    }
+    elseif ( $User.Count -gt 1 ) {
+        Write-Output "[ERROR] More than one user located with the provided input: $Identity. Please try a more descriptive identifier and try again (ex: UserPrincipalName versus DisplayName)"
+        exit 1
     }
     else {
         if ( $ShowOutput ) {
@@ -236,7 +263,6 @@ function Set-ADUserAliases {
     }
 
 }
-
 function Export-UserProperties {
     param (
         # Identity of the user to export
@@ -326,7 +352,6 @@ function Export-UserProperties {
     Write-Host "[INFO] Exported user property output to $($OutputPath)\$($Identity)_output.txt"
 
 }
-
 function New-Folder {
     Param([Parameter(Mandatory = $True)][String] $Path)
     if (-not (Test-Path -LiteralPath $Path)) {
