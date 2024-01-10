@@ -18,7 +18,6 @@ Author: Matt Stacey
 Date:   December 27, 2023
 
 To do:
-[ ] Add additional fields: Description, Home phone, Pager phone, IP phone, EmployeeID
 [ ] Find cleaner way to output and log instead of duplicate lines
 
 #>
@@ -75,15 +74,40 @@ param (
     [String]
     $Alias,
 
-    # User's office number (physicalDeliveryOfficeName or physical office name/number, not an office phone number)
+    # User's title
     [Parameter(Mandatory = $false)]
     [String]
-    $Office,
+    $Title,
+
+    # User's department
+    [Parameter(Mandatory = $false)]
+    [String]
+    $Department,
+
+    # User's manager
+    [Parameter(Mandatory = $false)]
+    [String]
+    $Manager,
+
+    # User's company
+    [Parameter(Mandatory = $false)]
+    [String]
+    $Company,
+
+    # User's employee ID
+    [Parameter(Mandatory = $false)]
+    [String]
+    $EmployeeID,
 
     # User's street address
     [Parameter(Mandatory = $false)]
     [String]
     $StreetAddress,
+
+    # User's office number (physicalDeliveryOfficeName or physical office name/number, not an office phone number)
+    [Parameter(Mandatory = $false)]
+    [String]
+    $Office,
 
     # User's city
     [Parameter(Mandatory = $false)]
@@ -115,25 +139,26 @@ param (
     [String]
     $Fax,
 
-    # User's title
+    # User's home phone number
     [Parameter(Mandatory = $false)]
     [String]
-    $Title,
+    $HomePhone,
 
-    # User's department
+    # User's IP phone number
     [Parameter(Mandatory = $false)]
     [String]
-    $Department,
+    $IpPhone,
 
-    # User's manager
+    # User's pager phone number
     [Parameter(Mandatory = $false)]
     [String]
-    $Manager,
+    $Pager,
 
-    # User's company
+    # Optional description for the Active Directory user object
     [Parameter(Mandatory = $false)]
     [String]
-    $Company
+    $Description
+    
 )
 function New-Folder {
         Param([Parameter(Mandatory = $True)][String] $Path)
@@ -340,18 +365,23 @@ function Export-UserProperties {
         'Enabled',
         'Mail',
         'ProxyAddresses',
-        'Office',
+        'Title',
+        'Department',
+        'Manager',
+        'Company',
+        'EmployeeID',
         'StreetAddress',
+        'Office',
         'City',
         'State',
         'postalCode',
         'Country',
         'Mobile',
         'Fax',
-        'Title',
-        'Department',
-        'Manager',
-        'Company',
+        'HomePhone',
+        'IpPhone',
+        'Pager',
+        'Description'
         'DistinguishedName',
         'MemberOf'
     )
@@ -387,18 +417,23 @@ function Export-UserProperties {
         Path                  = (($ADUser).DistinguishedName -split ",", 2)[1]
         EmailAddress          = $ADUser.Mail
         Aliases               = $Aliases
+        Title                 = $ADUser.Title
+        Department            = $ADUser.Department
+        Manager               = $ADUser.Manager
+        Company               = $ADUser.Company
+        EmployeeID            = $ADUser.EmployeeID
+        StreetAddress         = $ADUser.StreetAddress
         Office                = $ADUser.Office
-        StreetAddress         = $ADUser.StreetADdress
         City                  = $ADUser.City
         State                 = $ADUser.State
         postalCode            = $ADUser.postalCode
         Country               = $ADUser.Country
         Mobile                = $ADUser.Mobile
         Fax                   = $ADUser.Fax
-        Title                 = $ADUser.Title
-        Department            = $ADUser.Department
-        Manager               = $ADUser.Manager
-        Company               = $ADUser.Company
+        HomePhone             = $ADUser.HomePhone
+        IpPhone               = $ADUser.IpPhone
+        Pager                 = $ADUser.Pager
+        Description           = $ADUser.Description
         Groups                = $Groups
     }
     New-Folder -Path $OutputPath
@@ -424,7 +459,7 @@ $params = @{
     AccountPassword       = (Read-Host -AsSecureString -Prompt "Enter $($UserPrincipalName)'s password")
 }
 
-### Start validating/updatring params with optional parameters
+### Start validating/updating params with optional parameters
 
 # Match the country input to a valid two-letter country code
 if ( $Country ) {
@@ -443,7 +478,7 @@ if ( $Country ) {
 }
 
 # Add the optional properties that are a one-to-one property match
-$optionalProperties = @('EmailAddress', 'Office', 'StreetAddress', 'City', 'State', 'postalCode', 'Country', 'Mobile', 'Fax', 'Title', 'Department', 'Company')
+$optionalProperties = @('EmailAddress','Title','Department','Company','EmployeeID','StreetAddress','Office','City','State','postalCode','Country','Mobile','Fax','HomePhone','Description')
 $optionalProperties | ForEach-Object {
     $Value = Get-Variable -Name $_ -ErrorAction SilentlyContinue -ValueOnly
     if ( $Value ) {
@@ -496,6 +531,13 @@ if ( $CopyUser ) {
     }
 }
 
+### Add other customer attributes not supported by New-ADUser
+$otherAttributes = @{}
+
+# Add the user's pager and IP phone, if present
+if ( $Pager ) { $otherAttributes.Pager = $Pager  }
+if ( $IpPhone ) { $otherAttributes.IpPhone = $IpPhone }
+if ( $otherAttributes ) { $params.otherAttributes = $otherAttributes }
 
 ### Attempt to create the new account using $params
 try {
@@ -515,8 +557,8 @@ catch [Microsoft.ActiveDirectory.Management.ADPasswordComplexityException] {
     Write-Log "[WARNING] The password entered for $($params.Name) does not meet the length, complexity, or history requirement of the domain.The user was created successfully but the password needs to be reset and then the account can be enabled."
 }
 catch {
-    Write-Output "[ERROR] Error encountered while attempting to create $($params.Name): $($_.Exception.Message)."
-    Write-Log "[ERROR] Error encountered while attempting to create $($params.Name): $($_.Exception.Message)."
+    Write-Output "[ERROR] Failed to create $($params.Name). Error message: $($_.Exception.Message)"
+    Write-Log "[ERROR] Failed to create $($params.Name). Error message: $($_.Exception.Message)"
     exit 1
 }
 
