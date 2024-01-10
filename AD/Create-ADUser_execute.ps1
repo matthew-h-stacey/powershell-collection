@@ -30,10 +30,15 @@ foreach ($User in $CSV) {
     if ($User.Manager) { $params.Manager = $User.Manager }
     if ($User.Company) { $params.Company = $User.Company }
 
-    # Remove any trailing spaces from the input
+    # Remove any trailing spaces from strings in params
     $trimmedParams = @{}
     foreach ($key in $params.Keys) {
-        $trimmedParams[$key] = $params[$key] -replace '\s+$'
+        if ( $params[$key] -is [String]) {
+            $trimmedParams[$key] = $params[$key] -replace '\s+$'
+        }
+        else {
+            $trimmedParams[$key] = $params[$key]
+        }
     }
 
     .\Create-ADUser.ps1 @trimmedParams

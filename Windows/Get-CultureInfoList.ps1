@@ -3,7 +3,7 @@
 Provide an array with worldwide culture objects
 
 .DESCRIPTION
-This script utilize the .NET class [System.Globalization.CultureInfo] to retrieve a list of all cultures and helpful properties that can be used for a variety of reasons.
+This script utilizes the .NET class [System.Globalization.CultureInfo] to retrieve a list of all cultures and helpful properties that can be used for a variety of reasons.
 For example, the array can be used to parse country code input based on the English name or ISO 3166 two-letter region name
 
 .LINK
@@ -15,6 +15,9 @@ Example use case - Return two-digit country code based on input from a user:
 $cultureInfo = Get-CultureInfoList
 $country = "Senegal"
 $countryCode = ($cultureInfo | Where-Object {$_.EnglishName -like $country -or $_.TwoLetterISORegionName -like $country}).TwoLetterISORegionName | select -Unique 
+
+> $countryCode
+> SN
 
 #>
 
