@@ -1,12 +1,22 @@
-# Local account used for Windows LAPS
-$UserName = "cloud_laps"
-$UserDescription = "User account for Cloud LAPS"
+param(
+    # Local account used for Windows LAPS
+    [Parameter(Mandatory=$true)]
+    [String]
+    $UserName,
 
-# Logging
-$OutputDirectory = "C:\Windows\System32\LogFiles\EndpointManager"
-$LogFile = "$OutputDirectory\LocalAdminUser.log"
-Write-Log "[INFO] Starting Remediate-LocalAdmin. Username: $UserName" 
+    # Description for user account
+    [Parameter(Mandatory=$true)]
+    [String]
+    $UserDescription
+)
 
+function Write-Log {
+    param (
+        [String]
+        $LogString
+    )
+    Add-Content -Path $LogFile -Value "$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss') $LogString"
+}
 function Get-RandomPassword {
     # Generate a random 32-character password
 
@@ -21,7 +31,6 @@ function Get-RandomPassword {
     return $Password
 
 }
-
 function Get-LocalAdmins {
     # Retrieve a list of local admins (not including SID objects which are commonly unrecognized user accounts, or Azure AD roles/groups)
 
@@ -32,31 +41,9 @@ function Get-LocalAdmins {
 
     return $LocalAdminList
 }
-
-function Write-Log {
-    param (
-        [String]
-        $LogString
-    )
-    Add-Content -Path $LogFile -Value "$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss') $LogString"
-}
-
 function Remediate-LocalAdmin {
 
-    param (
-        # Username for the new local admin
-        [Parameter(Mandatory = $true)]
-        [String]
-        $UserName,
-
-        # Description for the new local admin
-        [Parameter(Mandatory = $false)]
-        [String]
-        $UserDescription
-    )
-
     $UserExists = (Get-LocalUser).Name -Contains $UserName
-
     switch ($UserExists ) {
         True {
             $LocalAdmins = Get-LocalAdmins
@@ -95,7 +82,7 @@ function Remediate-LocalAdmin {
                 exit 0
             }   
             catch {
-                Write-error $_
+                Write-Log "[ERROR] An error occurred when attempting to create local administrator: $UserName. Error: $($_.Exception.Message)"
                 exit 1
             } 
         }
@@ -104,4 +91,10 @@ function Remediate-LocalAdmin {
 
 }
 
+# Logging
+$OutputDirectory = "C:\Windows\System32\LogFiles\EndpointManager"
+$LogFile = "$OutputDirectory\LocalAdminUser.log"
+Write-Log "[INFO] Starting Remediate-LocalAdmin. Username: $UserName" 
+
+# Execution
 Remediate-LocalAdmin -UserName $UserName -UserDescription $UserDescription

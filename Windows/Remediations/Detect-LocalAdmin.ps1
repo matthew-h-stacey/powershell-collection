@@ -1,11 +1,9 @@
-﻿# Local account used for Windows LAPS
-$UserName = "cloud_laps"
-
-# Logging
-$OutputDirectory = "C:\Windows\System32\LogFiles\EndpointManager"
-New-Folder -Path $OutputDirectory
-$LogFile = "$OutputDirectory\LocalAdminUser.log"
-
+﻿param (
+    # Local account used for Windows LAPS
+    [Parameter(Mandatory=$true)]
+    [String]
+    $UserName
+)
 function New-Folder {
     Param([Parameter(Mandatory = $True)][String] $Path)
     if (-not (Test-Path -LiteralPath $Path)) {
@@ -22,7 +20,6 @@ function New-Folder {
     }
 
 }
-
 function Write-Log {
     param (
         [String]
@@ -30,15 +27,7 @@ function Write-Log {
     )
     Add-Content -Path $LogFile -Value "$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss') $LogString"
 }
-
 function Detect-LocalAdmin {
-
-    param (
-        # Name of the local user to check for the presence of
-        [Parameter(Mandatory = $true)]
-        [String]
-        $UserName
-    )
 
     Write-Log "[INFO] Starting Detect-LocalAdmin. Username: $UserName"
 
@@ -82,4 +71,10 @@ function Detect-LocalAdmin {
 
 }
 
+# Logging
+$OutputDirectory = "C:\Windows\System32\LogFiles\EndpointManager"
+New-Folder -Path $OutputDirectory
+$LogFile = "$OutputDirectory\LocalAdminUser.log"
+
+# Execution
 Detect-LocalAdmin -UserName $UserName
