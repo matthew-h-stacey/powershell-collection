@@ -9,10 +9,6 @@ The CSV is imported and then run against a foreach loop to pass all the inputted
 .\Create-ADUser_execute.ps1 - Helpful pre-created execution script to import a CSV and run the script
 .\Create-ADUser_template.csv - Template file for entering user properties into
 
-.PARAMETER (ALL)
-Each parameter should be fairly self explanatory as they correlate to an Active Directory user object. Each parameter below has a note preceding it which explains what it is.
-Given the amount of parameters in this script it would be excessive to list a description for each of them separately in this notes block.
-
 .NOTES
 Author: Matt Stacey
 Date:   December 27, 2023
@@ -160,8 +156,13 @@ param (
     $Description
     
 )
+
 function New-Folder {
-        Param([Parameter(Mandatory = $True)][String] $Path)
+        param(
+            [Parameter(Mandatory = $True)]
+            [String]
+            $Path
+        )
         if (-not (Test-Path -LiteralPath $Path)) {
             try {
                 New-Item -Path $Path -ItemType Directory -ErrorAction Stop | Out-Null
@@ -170,19 +171,32 @@ function New-Folder {
             catch {
                 Write-Error -Message "Unable to create directory '$Path'. Error was: $_" -ErrorAction Stop
             }
-        }
-        else {
+        } else {
             # Path already exists, continue"
         }
+}
 
-    }
 function Write-Log {
     param (
+        [Parameter(Mandatory = $True)]
         [String]
         $LogString
     )
     Add-Content -Path $LogFile -Value "$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss') $LogString"
 }
+
+function Write-LogAndOutput {
+    param (
+        [Parameter(Mandatory = $True)]
+        [String]
+        $LogString
+    )
+
+    Write-Log $LogString
+    Write-Output $LogString
+
+}
+
 function Get-CultureInfoList {
 
     $allCultures = [System.Globalization.CultureInfo]::GetCultures([System.Globalization.CultureTypes]::SpecificCultures)
@@ -203,9 +217,10 @@ function Get-CultureInfoList {
         }
     }
 
-    return $cultures
+    Write-Output $cultures
     
 }
+
 function Find-ADUser {
     # Searches for an ADUser with a UPN, DisplayName, or samAccount name. This allows the input to be more flexible than just using Get-ADUser
 
@@ -229,24 +244,20 @@ function Find-ADUser {
         if ( $Properties ) {
             $User = Get-ADUser -Filter { UserPrincipalName -eq $Identity } -Properties $Properties
             Write-Log "[INFO] Located user $Identity by UserPrincipalName"
-        }
-        else {
+        } else {
             $User = Get-ADUser -Filter { UserPrincipalName -eq $Identity }
             Write-Log "[INFO] Located user $Identity by UserPrincipalName"
         }
-    }
-    else {
+    } else {
         # Try to get the user by samAccountName or DisplayName
         if ( $Properties ) {
             $User = Get-ADUser -Filter { samAccountName -eq $Identity -or DisplayName -eq $Identity } -Properties $Properties
             Write-Log "[INFO] Located user $Identity by samAccountName/DisplayName"
-        }
-        else {
+        } else {
             $User = Get-ADUser -Filter { samAccountName -eq $Identity -or DisplayName -eq $Identity }
             Write-Log "[INFO] Located user $Identity by samAccountName/DisplayName"
         }
     }
-
     if ( !$User ) {
         Write-Output "[ERROR] Unable to locate a user with provided input: $Identity. Please verify that you entered the correct samAccountName/DisplayName/UserPrincipalName of an existing user and try again."
         Write-Log "[ERROR] Unable to locate a user with provided input: $Identity. Please verify that you entered the correct samAccountName/DisplayName/UserPrincipalName of an existing user and try again."
@@ -257,9 +268,10 @@ function Find-ADUser {
         Write-Log "[ERROR] More than one user located with the provided input: $Identity. Please try a more descriptive identifier and try again (ex: UserPrincipalName versus DisplayName)"
         exit 1
     }
-    return $User
+    Write-Output $User
 
 }
+
 function Copy-ADGroupMembership {
     # Copies the ADUser group membership from one user to another
     # Example: Copy-ADGroupMembership -Source jsmith@contoso.com -Destination aapple@contoso.com
@@ -287,8 +299,7 @@ function Copy-ADGroupMembership {
             if ( $Group -notin $CurrentMembership ) {
                 Add-ADGroupMember -Identity $Group -Members $Destination
                 Write-Log "[INFO] Added $Destination to $Group"
-            }
-            else {
+            } else {
                 # Skip - User is already a member
             }
         }
@@ -298,6 +309,7 @@ function Copy-ADGroupMembership {
     
     }
 }   
+
 function Set-ADUserAliases {
     # Sets the PrimarySmtpAddress and any aliases on an ADUser
     param (
@@ -342,6 +354,7 @@ function Set-ADUserAliases {
     }
 
 }
+
 function Export-UserProperties {
     param (
         # Identity of the user to export
@@ -446,119 +459,118 @@ function Export-UserProperties {
 $LogFile = ".\Create-ADUser.log"
 Write-Log "[START] Starting processing for user: $UserPrincipalName"
 
-### Start constructing params with the base parameters from the input file
-$params = @{
-    GivenName             = $FirstName
-    Surname               = $LastName
-    DisplayName           = $DisplayName
-    Name                  = $DisplayName
-    samAccountName        = $SamAccountName
-    UserPrincipalName     = $UserPrincipalName
-    ChangePasswordAtLogon = $ChangePasswordAtLogon
-    Enabled               = $Enabled
-    AccountPassword       = (Read-Host -AsSecureString -Prompt "Enter $($UserPrincipalName)'s password")
-}
+function Set-ADUserParams {
+    ### Start constructing params with the base parameters from the input file
+    $params = @{
+        GivenName             = $FirstName
+        Surname               = $LastName
+        DisplayName           = $DisplayName
+        Name                  = $DisplayName
+        samAccountName        = $SamAccountName
+        UserPrincipalName     = $UserPrincipalName
+        ChangePasswordAtLogon = $ChangePasswordAtLogon
+        Enabled               = $Enabled
+        AccountPassword       = (Read-Host -AsSecureString -Prompt "Enter $($UserPrincipalName)'s password")
+    }
 
-### Start validating/updating params with optional parameters
+    ### Start validating/updating params with optional parameters
 
-# Match the country input to a valid two-letter country code
-if ( $Country ) {
-    $cultureInfo = Get-CultureInfoList
-    $countryCode = ($cultureInfo | Where-Object { $_.EnglishName -like $Country -or $_.TwoLetterISORegionName -like $Country }).TwoLetterISORegionName | Select-Object -Unique
-    if ( $countryCode ) {
-        Write-Log "[INFO] Matched provided country ($Country) to ISO 3166 two-letter region name: $countryCode"
-        $Country = $countryCode
+    # Match the country input to a valid two-letter country code
+    if ( $Country ) {
+        $cultureInfo = Get-CultureInfoList
+        $countryCode = ($cultureInfo | Where-Object { $_.EnglishName -like $Country -or $_.TwoLetterISORegionName -like $Country }).TwoLetterISORegionName | Select-Object -Unique
+        if ( $countryCode ) {
+            Write-Log "[INFO] Matched provided country ($Country) to ISO 3166 two-letter region name: $countryCode"
+            $Country = $countryCode
         
-    } 
-    else {
-        Write-Output "[ERROR] Failed to match the provided country ($Country) to an ISO 3166 two-letter region name (example: Mexico -> MX). Please set the country to a valid two-letter region name and try again."
-        Write-Log "[ERROR] Failed to match the provided country ($Country) to an ISO 3166 two-letter region name (example: Mexico -> MX)"
-        exit 1
+        } else {
+            Write-Output "[ERROR] Failed to match the provided country ($Country) to an ISO 3166 two-letter region name (example: Mexico -> MX). Please set the country to a valid two-letter region name and try again."
+            Write-Log "[ERROR] Failed to match the provided country ($Country) to an ISO 3166 two-letter region name (example: Mexico -> MX)"
+            exit 1
+        }
     }
+
+    # Add the optional properties that are a one-to-one property match
+    $optionalProperties = @('EmailAddress', 'Title', 'Department', 'Company', 'EmployeeID', 'StreetAddress', 'Office', 'City', 'State', 'postalCode', 'Country', 'Mobile', 'Fax', 'HomePhone', 'Description')
+    $optionalProperties | ForEach-Object {
+        $Value = Get-Variable -Name $_ -ErrorAction SilentlyContinue -ValueOnly
+        if ( $Value ) {
+            $params.$_ = $Value
+            Write-Log "[INFO] Added optional parameter value: $_ - $Value"
+        }
+    }
+    # Add the user's manager
+    if ( $Manager ) {
+        Write-Log "[INFO] Attempting to locate Active Directory user using input: $Manager"
+        if ( $Manager = (Find-ADUser -Identity $Manager).SamAccountName ) {
+            $params.Manager = $Manager
+            Write-Log "[INFO] Added manager parameter value: $Manager"
+        } else {
+            Write-Log "[WARNING] Unable to locate manager using input: $Manager. Manager will need to be set manually"
+            Write-Output "[WARNING] Unable to locate manager using input: $Manager. Manager will need to be set manually"
+        }
+    }
+
+    # If a user was provided in the CopyUser section of the CSV, locate the user by UPN/SamAccountName/DisplayName and provide the user object as the Instance parameter
+    # This will be used to copy ADUser group memberships and properties. Note: The new user will use the copied values (ex: City/State/etc.) UNLESS overriden by a different value in the corresponding optional field
+    if ( $CopyUser ) {
+        Write-Log "[INFO] CopyUser parameter value was provided, attempting to locate $CopyUser"
+        $Properties = @(
+            'City',
+            'Company',
+            'Country',
+            'Department',
+            'logonHours',
+            'MemberOf',
+            'PostalCode',
+            'scriptPath',
+            'State',
+            'StreetAddress',
+            'Title'
+        )
+        $UserToCopy = Find-ADUser -Identity $CopyUser -Properties $Properties -ErrorAction Stop
+        if ($UserToCopy) {
+            $params.Instance = $UserToCopy # Instance is the parameter in Set-ADUser which take an existing ADUser object as input
+            $Path = ($UserToCopy.DistinguishedName -split ",", 2)[1] # This pulls just the target OU path of the user being copied so the new user is created in the same OU
+            $params.Path = $Path
+            Write-Log "[INFO] Added to CopyUser parameter value: $($UserToCopy.samAccountName)"
+            Write-Log "[INFO] Added path parameter value from CopyUser: $Path"
+        } else {
+            Write-Output "[ERROR] A user to copy (CopyUser) was provided in the input, but the user could not be found. Exiting script."
+            Write-Log "[ERROR] A user to copy (CopyUser) was provided in the input, but the user could not be found. Exiting script"
+            exit 1
+        }
+    }
+
+    ### Add other customer attributes not supported by New-ADUser
+    $otherAttributes = @{}
+
+    # Add the user's pager and IP phone, if present
+    if ( $Pager ) { $otherAttributes.Pager = $Pager }
+    if ( $IpPhone ) { $otherAttributes.IpPhone = $IpPhone }
+    if ( $otherAttributes ) { $params.otherAttributes = $otherAttributes }
+
+    $params
+    
 }
 
-# Add the optional properties that are a one-to-one property match
-$optionalProperties = @('EmailAddress','Title','Department','Company','EmployeeID','StreetAddress','Office','City','State','postalCode','Country','Mobile','Fax','HomePhone','Description')
-$optionalProperties | ForEach-Object {
-    $Value = Get-Variable -Name $_ -ErrorAction SilentlyContinue -ValueOnly
-    if ( $Value ) {
-        $params.$_ = $Value
-        Write-Log "[INFO] Added optional parameter value: $_ - $Value"
-    }
-}
-# Add the user's manager
-if ( $Manager ) {
-    Write-Log "[INFO] Attempting to locate Active Directory user using input: $Manager"
-    if ( $Manager = (Find-ADUser -Identity $Manager).SamAccountName ) {
-        $params.Manager = $Manager
-        Write-Log "[INFO] Added manager parameter value: $Manager"
-    }
-    else {
-        Write-Log "[WARNING] Unable to locate manager using input: $Manager. Manager will need to be set manually"
-        Write-Output "[WARNING] Unable to locate manager using input: $Manager. Manager will need to be set manually"
-    }
-}
 
-# If a user was provided in the CopyUser section of the CSV, locate the user by UPN/SamAccountName/DisplayName and provide the user object as the Instance parameter
-# This will be used to copy ADUser group memberships and properties. Note: The new user will use the copied values (ex: City/State/etc.) UNLESS overriden by a different value in the corresponding optional field
-if ( $CopyUser ) {
-    Write-Log "[INFO] CopyUser parameter value was provided, attempting to locate $CopyUser"
-    $Properties = @(
-        'City',
-        'Company',
-        'Country',
-        'Department',
-        'logonHours',
-        'MemberOf',
-        'PostalCode',
-        'scriptPath',
-        'State',
-        'StreetAddress',
-        'Title'
-    )
-    $UserToCopy = Find-ADUser -Identity $CopyUser -Properties $Properties -ErrorAction Stop
-    if ($UserToCopy) {
-        $params.Instance = $UserToCopy # Instance is the parameter in Set-ADUser which take an existing ADUser object as input
-        $Path = ($UserToCopy.DistinguishedName -split ",", 2)[1] # This pulls just the target OU path of the user being copied so the new user is created in the same OU
-        $params.Path = $Path
-        Write-Log "[INFO] Added to CopyUser parameter value: $($UserToCopy.samAccountName)"
-        Write-Log "[INFO] Added path parameter value from CopyUser: $Path"
-    }
-    else {
-        Write-Output "[ERROR] A user to copy (CopyUser) was provided in the input, but the user could not be found. Exiting script."
-        Write-Log "[ERROR] A user to copy (CopyUser) was provided in the input, but the user could not be found. Exiting script"
-        exit 1
-    }
-}
-
-### Add other customer attributes not supported by New-ADUser
-$otherAttributes = @{}
-
-# Add the user's pager and IP phone, if present
-if ( $Pager ) { $otherAttributes.Pager = $Pager  }
-if ( $IpPhone ) { $otherAttributes.IpPhone = $IpPhone }
-if ( $otherAttributes ) { $params.otherAttributes = $otherAttributes }
-
-### Attempt to create the new account using $params
+# Construct $params and attempt to create the user account
+$params = Set-ADUserParams
 try {
-    Write-Output "[INFO] Attempting to create new user: $($params.samAccountName)"
-    Write-Log "[INFO] Attempting to create new user: $($params.samAccountName)"
+    Write-LogAndOutput -LogString "[INFO] Attempting to create new user: $($params.samAccountName)"
     New-ADUser @params
-    Write-Output "[INFO] Successfully created new user: $($params.samAccountName)"
-    Write-Log "[INFO] Successfully created new user: $($params.samAccountName)"
+    Write-LogAndOutput "[INFO] Successfully created new user: $($params.samAccountName)"
 }
 catch [System.UnauthorizedAccessException] {
-    Write-Output "[ERROR] Error encountered while attempting to create $($params.Name): $($_.Exception.Message). Make sure you are running the script as Administrator and try again."
-    Write-Log "[ERROR] Error encountered while attempting to create $($params.Name): $($_.Exception.Message). Make sure you are running the script as Administrator and try again."
+    Write-LogAndOutput "[ERROR] Error encountered while attempting to create $($params.Name): $($_.Exception.Message). Make sure you are running the script as Administrator and try again."
     exit 1
 }
 catch [Microsoft.ActiveDirectory.Management.ADPasswordComplexityException] {
-    Write-Output "[WARNING] The password entered for $($params.Name) does not meet the length, complexity, or history requirement of the domain.The user was created successfully but the password needs to be reset and then the account can be enabled."
-    Write-Log "[WARNING] The password entered for $($params.Name) does not meet the length, complexity, or history requirement of the domain.The user was created successfully but the password needs to be reset and then the account can be enabled."
+    Write-LogAndOutput "[WARNING] The password entered for $($params.Name) does not meet the length, complexity, or history requirement of the domain.The user was created successfully but the password needs to be reset and then the account can be enabled."
 }
 catch {
-    Write-Output "[ERROR] Failed to create $($params.Name). Error message: $($_.Exception.Message)"
-    Write-Log "[ERROR] Failed to create $($params.Name). Error message: $($_.Exception.Message)"
+    Write-LogAndOutput "[ERROR] Failed to create $($params.Name). Error message: $($_.Exception.Message)"
     exit 1
 }
 

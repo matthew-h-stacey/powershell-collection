@@ -1,80 +1,139 @@
-﻿param (
-    # Local account used for Windows LAPS
-    [Parameter(Mandatory=$true)]
-    [String]
-    $UserName
-)
-function New-Folder {
-    Param([Parameter(Mandatory = $True)][String] $Path)
+﻿function New-Folder {
+    
+    <#
+    .SYNOPSIS
+    Determine if a folder already exists, or create it  if not.
+
+    .EXAMPLE
+    New-Folder C:\TempPath
+    #>
+
+    param(
+        [Parameter(Mandatory = $True)]
+        [String]
+        $Path
+    )
     if (-not (Test-Path -LiteralPath $Path)) {
         try {
             New-Item -Path $Path -ItemType Directory -ErrorAction Stop | Out-Null
-            Write-Host "Created folder: $Path"
-        }
-        catch {
+        } catch {
             Write-Error -Message "Unable to create directory '$Path'. Error was: $_" -ErrorAction Stop
         }
-    }
-    else {
-        # Folder already exists, continue
+    } else {
+        # Path already exists, continue
     }
 
 }
+
 function Write-Log {
-    param (
-        [String]
-        $LogString
-    )
-    Add-Content -Path $LogFile -Value "$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss') $LogString"
-}
-function Detect-LocalAdmin {
+    
+    <#
+    .SYNOPSIS
+    Log to a specific file/folder path with timestamps
 
-    Write-Log "[INFO] Starting Detect-LocalAdmin. Username: $UserName"
+    .EXAMPLE
+    Write-Log -Message "[INFO] Attempting to do the thing" -LogFile C:\Scripts\MyScript.log
+    Write-Log -Message "[INFO] Attempting to do the thing" -LogFile $logFile 
+    #>
+    
+    param (
+        [Parameter(Mandatory = $true)]
+        [String]
+        $Message,
+
+        [Parameter(Mandatory = $true)]
+        [String]
+        $logFile
+    )
+
+    $timeStampMessage = "$((Get-Date -Format "MM/dd/yyyy HH:mm:ss")) $Message"
+    Add-Content -Value $timeStampMessage -Path $logFile
+
+}
+
+function Get-LocalAdmins {
+
+    <#
+    .SYNOPSIS
+    Retrieve a list of local admins (not including SID objects which are commonly unrecognized user accounts or Azure AD roles/groups)
+    
+    .EXAMPLE
+    $localAdmins = Get-LocalAdmins
+    #>
+
+    # Retrieve the current local administrators. ADSI call versus Get-LocalGroupMember due to the command not parsing correctly on Entra-ID joined PCs if Azure AD roles/groups are present
+    $localAdmins = ([ADSI]"WinNT://./Administrators").psbase.Invoke('Members') | ForEach-Object {
+        ([ADSI]$_).InvokeGet('AdsPath')
+    }
+    $localAdminList = $localAdmins -replace 'WinNT://', '' -replace '/', '\' | Where-Object { $_ -notlike "S-1*" }
+    $localAdminList
+
+}
+
+function Test-LocalAdmin {
+    
+    <#
+    .SYNOPSIS
+    Locate a local administrator account. Returns a hash table that shows whether or not the user is present and if it is a local admin
+
+    .EXAMPLE
+    Test-LocalAdmin -Username cloud_laps
+    #>
+
+    param (
+        # The username of the local administrator account
+        [Parameter(Mandatory = $true)]
+        [String]
+        $Username
+    )
+
+    # Object to be returned with properties about the user account
+    $userAccount = @{}
 
     # First check to see if the local user exists. Proceed if they are, exit and trigger remediation if not
-    $UserExists = (Get-LocalUser).Name -Contains $UserName
+    $userExists = (Get-LocalUser).Name -Contains $Username
 
-    if ($UserExists) { 
-        # Next check if the user is a local admin
-
-        # Query local administrators and format the output
-        $LocalAdmins = ([ADSI]"WinNT://./Administrators").psbase.Invoke('Members') | ForEach-Object {
-            ([ADSI]$_).InvokeGet('AdsPath')
-        }
-        $LocalAdmins = $LocalAdmins -replace 'WinNT://', '' -replace '/', '\' | Where-Object { $_ -notlike "S-1*" }
-    
+    if ($userExists) {
+        $userAccount.isPresent = $True
+        $localAdmins = Get-LocalAdmins    
         # Check if the user is local admin, store result as boolean
-        $IsLocalAdmin = ($LocalAdmins | ForEach-Object { $_ -like "*\$UserName" }) -contains $true
-    
-        # Provide exit codes depending on whether or not remediation is required
-        switch ( $IsLocalAdmin ) {
-            True {
-                # User is already a local admin, no action needed. Write to the log and console output
-                Write-Output "[INFO] User $UserName is already a local admin. No remediation needed"
-                Write-Log "[INFO] User $UserName is already a local admin. No remediation needed"
-                exit 0
-            }
-            False {
-                # User is not a local admin, remediation required
-                Write-Log "[INFO] User $UserName is not a local admin. Initiating remediation"
-                exit 1
-            }
+        $isLocalAdmin = ($localAdmins | ForEach-Object { $_ -like "*\$Username" }) -contains $true
+        if ( $isLocalAdmin ) {
+            $userAccount.isLocalAdmin = $True
         }
-
-    } 
-  
-    # User does not exist, trigger remediation
-    else {   
-        Write-Log "[INFO] User $UserName is not present. Initiating remediation"
-        exit 1
+        else {
+            $userAccount.isLocalAdmin = $False
+        }
+    } else {
+        $userAccount.isPresent = $False   
+        $userAccount.isLocalAdmin = $False
     }
+
+    $userAccount
 
 }
 
+# Local account used for Windows LAPS
+$Username = "cloud_laps"
+
 # Logging
-$OutputDirectory = "C:\Windows\System32\LogFiles\EndpointManager"
-New-Folder -Path $OutputDirectory
-$LogFile = "$OutputDirectory\LocalAdminUser.log"
+$outputDirectory = "C:\Windows\System32\LogFiles\EndpointManager"
+New-Folder -Path $outputDirectory
+$logFile = "$outputDirectory\LocalAdminUser.log"
 
 # Execution
-Detect-LocalAdmin -UserName $UserName
+$user = Test-LocalAdmin -Username $Username
+
+# Trigger remediation (exit 1) if the user doesn't exist, or exists but is not a local administrator. Otherwise, no remediation is required
+if ( $user.IsPresent -eq $False) {
+    Write-Log -Message "[INFO] User $Username is not present. Initiating remediation" -LogFile $logFile
+    exit 1
+}
+if ( $user.isLocalAdmin -eq $False) {
+    Write-Log -Message "[INFO] User $Username is not a local admin. Initiating remediation" -LogFile $logFile
+    exit 1
+}
+else {
+    Write-Log "[INFO] User $Username is already a local admin. No remediation needed" -LogFile $logFile
+    exit 0
+}

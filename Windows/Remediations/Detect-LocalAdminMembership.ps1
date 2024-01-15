@@ -1,89 +1,128 @@
-# Local account used for Windows LAPS
-$RetainAdmin = "cloud_laps"
-
 function New-Folder {
-    Param([Parameter(Mandatory = $True)][String] $Path)
+    
+    <#
+    .SYNOPSIS
+    Determine if a folder already exists, or create it  if not.
+
+    .EXAMPLE
+    New-Folder C:\TempPath
+    #>
+
+    param(
+        [Parameter(Mandatory = $True)]
+        [String]
+        $Path
+    )
     if (-not (Test-Path -LiteralPath $Path)) {
         try {
             New-Item -Path $Path -ItemType Directory -ErrorAction Stop | Out-Null
-        }
-        catch {
+        } catch {
             Write-Error -Message "Unable to create directory '$Path'. Error was: $_" -ErrorAction Stop
         }
-    }
-    else {
+    } else {
         # Path already exists, continue
     }
 
 }
 
 function Write-Log {
+    
+    <#
+    .SYNOPSIS
+    Log to a specific file/folder path with timestamps
+
+    .EXAMPLE
+    Write-Log -Message "[INFO] Attempting to do the thing" -LogFile C:\Scripts\MyScript.log
+    Write-Log -Message "[INFO] Attempting to do the thing" -LogFile $LogFile 
+    #>
+    
     param (
+        [Parameter(Mandatory = $true)]
         [String]
-        $LogString
+        $Message,
+
+        [Parameter(Mandatory = $true)]
+        [String]
+        $LogFile
     )
-    Add-Content -Path $LogFile -Value "$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss') $LogString"
+
+    $timeStampMessage = "$((Get-Date -Format "MM/dd/yyyy HH:mm:ss")) $Message"
+    Add-Content -Value $timeStampMessage -Path $LogFile
+
 }
 
-function Detect-LocalAdminMembership {
+function Get-LocalAdmins {
+
+    <#
+    .SYNOPSIS
+    Retrieve a list of local admins (not including SID objects which are commonly unrecognized user accounts or Azure AD roles/groups)
+    
+    .EXAMPLE
+    $localAdmins = Get-LocalAdmins
+    #>
+
+    # Retrieve the current local administrators. ADSI call versus Get-LocalGroupMember due to the command not parsing correctly on Entra-ID joined PCs if Azure AD roles/groups are present
+    $localAdmins = ([ADSI]"WinNT://./Administrators").psbase.Invoke('Members') | ForEach-Object {
+        ([ADSI]$_).InvokeGet('AdsPath')
+    }
+    $localAdminList = $localAdmins -replace 'WinNT://', '' -replace '/', '\' | Where-Object { $_ -notlike "S-1*" }
+    $localAdminList
+
+}
+
+function Get-UnwantedLocalAdmins {
+    <#
+    .SYNOPSIS
+    Return a list of all local admins except for $RetainAdmin
+
+    .EXAMPLE
+    Get-UnwantedLocalAdmins -RetainAdmin cloud_laps
+    #>
 
     param (
-        # Enter the name of the user who should retain their admin access to the PC. Typically this should be a Windows LAPS account
+        # Enter the name of the user who should retain their admin access to the PC after the remediation executes (ex: a Windows LAPS user account)
         [Parameter(Mandatory = $true)]
         [String]
         $RetainAdmin
     )
 
     # Create a list of users that should be local admins (built-in admin + $RetainAdmin)
-    $DesiredLocalAdmins = New-Object System.Collections.Generic.List[System.Object]
-    $BuiltInAdmin = Get-LocalUser | Where-Object { $_.Description -like "Built-in account for administering the computer/domain" }
-    $DesiredLocalAdmins.Add($BuiltInAdmin.Name)
-    $DesiredLocalAdmins.Add($RetainAdmin)
-
-    # Retrieve the current local administrators
-    $LocalAdmins = ([ADSI]"WinNT://./Administrators").psbase.Invoke('Members') | ForEach-Object {
-    ([ADSI]$_).InvokeGet('AdsPath')
-    }
-    $LocalAdmins = $LocalAdmins -replace 'WinNT://', '' -replace '/', '\' | Where-Object { $_ -notlike "S-1*" }
+    $desiredLocalAdmins = New-Object System.Collections.Generic.List[System.Object]
+    $builtInAdmin = Get-LocalUser | Where-Object { $_.Description -like "Built-in account for administering the computer/domain" }
+    $desiredLocalAdmins.Add($builtInAdmin.Name)
+    $desiredLocalAdmins.Add($RetainAdmin)
 
     # Determine if there are additional local admins
-    $ExtraMembersPresent = $LocalAdmins | Where-Object { 
+    $localAdmins = Get-LocalAdmins
+    $unwantedLocalAdmins = $localAdmins | Where-Object { 
         $MemberWithoutDomain = $_.Split('\')[1]
-        $DesiredLocalAdmins -notcontains $MemberWithoutDomain
+        $desiredLocalAdmins -notcontains $MemberWithoutDomain
     }
-
-    try {
-        # 
-        if ($ExtraMembersPresent.Count -gt 0) {
-            # Extra local admins are present, need to remove extras
-            Write-Log "[INFO] Found extra local administrators. Executing the remediation script"
-            exit 1
-        }
-        if ($ExtraMembersPresent.Count -eq 0) {
-            # No extra local admins are present, no action needed
-            Write-Log "[INFO] No extra local admins found. Skipping the remediation script, no action needed"
-            exit 0
-        }
-    }
-    catch {
-        # Catch any exception and handle it
-        Write-Error "[ERROR] Error encountered while attempting to determine if extra local admins are present. Error: $($_.Exception.Message)"
-        exit 1
-    }
+    $unwantedLocalAdmins
 
 }
+
+# Local account used for Windows LAPS
+$RetainAdmin = "cloud_laps"
 
 # Logging
-$OutputDirectory = "C:\Windows\System32\LogFiles\EndpointManager"
+$outputDirectory = "C:\Windows\System32\LogFiles\EndpointManager"
 New-Folder -Path $OutputDirectory
-$LogFile = "$OutputDirectory\LocalAdminMembership.log"
-Write-Log "[INFO] Starting Detect-LocalAdminMembership. Retain username: $RetainAdmin"
+$logFile = "$OutputDirectory\LocalAdminMembership.log"
 
 # Execution
-try {
-    Detect-LocalAdminMembership -RetainAdmin $RetainAdmin
-    Write-Output "[INFO] Detection executed successfully. Check log file for output ($LogFile)"
+$userExists = (Get-LocalUser).Name -Contains $RetainAdmin
+    if ( $userExists ) {
+    $UnwantedLocalAdmins = Get-UnwantedLocalAdmins -RetainAdmin $RetainAdmin
+    if ($UnwantedLocalAdmins.Count -gt 0) {
+        Write-Log "[INFO] $retainAdmin is not the only local administrator. Initiating remediation" -LogFile $logFile
+        exit 1
+    }
+    if ($UnwantedLocalAdmins.Count -eq 0) {
+        Write-Log "[INFO] $retainAdmin is the only local administrators. No remediation needed" -LogFile $logFile
+        exit 0
+    }
 }
-catch {
-    Write-Output "[ERROR] Failed to execute detection. Error: $($_.Exception.Message)"
+else {
+    Write-Log "[ERROR] Unable to locate user: $RetainAdmin. Remediation cannot proceed" -LogFile $logFile
 }
