@@ -96,8 +96,7 @@ function Clear-LocalAdminMembership {
         try {
             Remove-LocalGroupMember -Group Administrators -Member $admin -ErrorAction Stop
             Write-Log "[INFO] Administrators: Removed $($admin)" -LogFile $logFile
-        }
-        catch {
+        } catch {
             Write-Log "[ERROR] Administrators: Failed to remove $($admin.Name) from group. Error: $($_.Exception.Message)" -LogFile $logFile
         }
     }
@@ -119,8 +118,7 @@ if ( $userExists ) {
     } catch {
         Write-Log "[ERROR] Failed to execute remediation. Error: $($_.Exception.Message)" -LogFile $logFile
     }
-}
-else {
+} else {
     Write-Log "[ERROR] Unable to locate user: $RetainAdmin. Remediation cannot proceed" -LogFile $logFile
 }
 

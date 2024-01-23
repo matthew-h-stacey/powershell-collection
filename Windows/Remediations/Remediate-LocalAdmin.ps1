@@ -98,13 +98,11 @@ function Set-LocalAdmin {
                 Add-LocalGroupMember -Group Administrators -Member $Username
                 Write-Log "[INFO] Added $Username to Administrators" -LogFile $logFile
                 exit 0
-            }
-            catch {
+            } catch {
                 Write-Log "[ERROR] An error occurred when attempting to add $Username to Administrators. Error: $($_.Exception.Message)" -LogFile $logFile
                 exit 1
             }
-        }
-        else {
+        } else {
             Write-Log "[INFO] User $Username is already a local admin. Exiting remediation" -LogFile $logFile
             exit 0
         }
@@ -121,8 +119,7 @@ function Set-LocalAdmin {
             Add-LocalGroupMember -Group Administrators -Member $Username
             Write-Log "[INFO] Successfully created a new local admin account: $Username" -LogFile $logFile
             exit 0
-        }   
-        catch {
+        } catch {
             Write-Log "[ERROR] An error occurred when attempting to create local administrator: $Username. Error: $($_.Exception.Message)" -LogFile $logFile
             exit 1
         } 

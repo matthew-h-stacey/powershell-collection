@@ -71,6 +71,7 @@ function Get-LocalAdmins {
 }
 
 function Get-UnwantedLocalAdmins {
+
     <#
     .SYNOPSIS
     Return a list of all local admins except for $RetainAdmin
@@ -112,17 +113,15 @@ $logFile = "$OutputDirectory\LocalAdminMembership.log"
 
 # Execution
 $userExists = (Get-LocalUser).Name -Contains $RetainAdmin
-    if ( $userExists ) {
+if ( $userExists ) {
     $UnwantedLocalAdmins = Get-UnwantedLocalAdmins -RetainAdmin $RetainAdmin
     if ($UnwantedLocalAdmins.Count -gt 0) {
         Write-Log "[INFO] $retainAdmin is not the only local administrator. Initiating remediation" -LogFile $logFile
         exit 1
-    }
-    if ($UnwantedLocalAdmins.Count -eq 0) {
+    } elseif ($UnwantedLocalAdmins.Count -eq 0) {
         Write-Log "[INFO] $retainAdmin is the only local administrators. No remediation needed" -LogFile $logFile
         exit 0
     }
-}
-else {
+} else {
     Write-Log "[ERROR] Unable to locate user: $RetainAdmin. Remediation cannot proceed" -LogFile $logFile
 }

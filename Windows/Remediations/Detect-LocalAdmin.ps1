@@ -100,8 +100,7 @@ function Test-LocalAdmin {
         $isLocalAdmin = ($localAdmins | ForEach-Object { $_ -like "*\$Username" }) -contains $true
         if ( $isLocalAdmin ) {
             $userAccount.isLocalAdmin = $True
-        }
-        else {
+        } else {
             $userAccount.isLocalAdmin = $False
         }
     } else {
@@ -132,8 +131,7 @@ if ( $user.IsPresent -eq $False) {
 if ( $user.isLocalAdmin -eq $False) {
     Write-Log -Message "[INFO] User $Username is not a local admin. Initiating remediation" -LogFile $logFile
     exit 1
-}
-else {
+} else {
     Write-Log "[INFO] User $Username is already a local admin. No remediation needed" -LogFile $logFile
     exit 0
 }
