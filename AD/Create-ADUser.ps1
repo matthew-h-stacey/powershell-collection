@@ -356,21 +356,20 @@ function Copy-ADGroupMembership {
 
     # Add the user to every group they are not already a member of
     foreach ( $Group in $Groups ) {
-        try {
-            if ( $Group -notin $CurrentMembership ) {
+        if ( $Group -notin $CurrentMembership ) {
+            try {
                 Add-ADGroupMember -Identity $Group -Members $Destination
-                if ( $ LogFile ) {
+                if ( $LogFile ) {
                     Write-Log -Message "[INFO] Added $Destination to $Group" -LogFile $logFile
                 }
-            }
-        } catch {
-            if ( $LogFile ) {
-                Write-Log -Message "[ERROR] Failed to add $Destination to group: $Group. Error: $($_.Exception.Message)" -LogFile $logFile
-            } else {
-                Write-Output -Message "[ERROR] Failed to add $Destination to group: $Group. Error: $($_.Exception.Message)"
+            } catch {
+                if ( $LogFile ) {
+                    Write-Log -Message "[ERROR] Failed to add $Destination to group: $Group. Error: $($_.Exception.Message)" -LogFile $logFile
+                } else {
+                    Write-Output "[ERROR] Failed to add $Destination to group: $Group. Error: $($_.Exception.Message)"
+                }
             }
         }
-    
     }
 }   
 
@@ -601,7 +600,7 @@ function Set-ADUserParams {
             'StreetAddress',
             'Title'
         )
-        $UserToCopy = Find-ADUser -Identity $CopyUser -Properties $Properties -LogFile $logFile -ErrorAction Stop
+        $script:UserToCopy = Find-ADUser -Identity $CopyUser -Properties $Properties -LogFile $logFile -ErrorAction Stop
         if ($UserToCopy) {
             $params.Instance = $UserToCopy # Instance is the parameter in Set-ADUser which take an existing ADUser object as input
             $Path = ($UserToCopy.DistinguishedName -split ",", 2)[1] # This pulls just the target OU path of the user being copied so the new user is created in the same OU
@@ -615,7 +614,7 @@ function Set-ADUserParams {
         }
     }
 
-    ### Add other customer attributes not supported by New-ADUser
+    ### Add other user attributes that do not have a dedicated parameter in New-ADUser
     $otherAttributes = @{}
 
     # Add the user's pager and IP phone, if present
@@ -628,7 +627,8 @@ function Set-ADUserParams {
 }
 
 ### Logging
-$logFile = ".\Create-ADUser.log"
+$logFile = "C:\Scripts\Create-ADUser.log"
+Write-Output "Log file: $logfile"
 Write-Log -Message "[START] Starting processing for user: $UserPrincipalName" -LogFile $logFile
 
 # Construct $params and attempt to create the user account
@@ -636,7 +636,7 @@ $params = Set-ADUserParams
 try {
     Write-LogAndOutput -LogString "[INFO] Attempting to create new user: $($params.samAccountName)"
     New-ADUser @params
-    Write-LogAndOutput "[INFO] Successfully created new user: $($params.samAccountName)"
+    Write-LogAndOutput "[INFO] Successfully created new user"
 } catch [System.UnauthorizedAccessException] {
     Write-LogAndOutput "[ERROR] Error encountered while attempting to create $($params.Name): $($_.Exception.Message). Make sure you are running the script as Administrator and try again."
     exit 1
@@ -655,13 +655,13 @@ if ( $Alias ) {
     $Aliases = $Alias.Split(";")
 
     # Run the function to set both the PrimarySmtpAddress and any aliases
-    Set-ADUserAliases -Identity $SamAccountName -PrimarySmtpAddress $EmailAddress -Aliases $Aliases
+    Set-ADUserAliases -Identity $SamAccountName -PrimarySmtpAddress $EmailAddress -Aliases $Aliases -LogFile $logFile
 
 }
 
 # Copy group membership
 if ( $CopyUser ) {
-    Copy-ADGroupMembership -Source $UserToCopy.SamAccountName -Destination $params.SamAccountName -LogFile $logFile
+    Copy-ADGroupMembership -Source $UserToCopy.SamAccountName -Destination $params['SamAccountName'] -LogFile $logFile        
 }
 
 Export-UserProperties -Identity $SamAccountName -OutputPath C:\Scripts
