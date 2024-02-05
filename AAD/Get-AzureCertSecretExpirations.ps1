@@ -26,7 +26,7 @@ If Scope is set to "ExpiringSoonOnly," only report on certificates expired/expir
 .NOTES
 Author: Matt Stacey
 Version: 2.0
-Date: Feb 21, 2023
+Date: June 20, 2023
 
 To-Do:
 - Fix Apple Push check failing script on clients that do not have an Apple Push certificate. Reached out to SkyKick support about this 2/27/2023. According to them, no known resolution at this time.
@@ -92,285 +92,221 @@ function Get-AzureCertSecretExpirations {
         )][int]$ThresholdDays
     )
 
-    # Global Variables 
-    $strLengthThresold = 40 # truncate app name/secret name/certificate names that are longer than X characters long for cleaner output
-    $StaleThreshold = 90 # Ignore certs that are older than X days old to limit "white noise" (i.e application/service no longer being used)
-    $Today = Get-Date
-
+    function Add-HTMLOutput {
+        $outputObject = [PSCustomObject]@{
+            Client              = $clientName
+            Category            = $category # ApplePush, AppReg, EnterpriseApp
+            Type                = $objectType # Certificate, secret
+            AppName             = $appName # Name of app reg or enterprise app
+            Name                = $objectName # Name of the secret/certificate
+            IsExpired           = $isExpired
+            DaysUntilExpiration = $timespan.Days
+        }
+        $output.Add($outputObject)
+    }
 
     function Get-ApplePushCertExpiration {
 
         try {
+            $category = "ApplePush"
+            $objectType = "Certificate"
+            $objectName = "Apple MDM Push certificate"
+            $appName = "N/A"
             $applePushCert = Invoke-MSGraphRequest -HttpMethod 'GET' -Url 'https://graph.microsoft.com/v1.0/deviceManagement/applePushNotificationCertificate' -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-            $Timespan = New-TimeSpan -Start $Today -End $applePushCert.expirationDateTime
-            $IsExpired = ($Timespan.Days -lt 0)
+            $timespan = New-TimeSpan -Start $today -End $applePushCert.expirationDateTime
+            $isExpired = ($timespan.Days -lt 0)
             switch ($Scope) {
                 'All' {
-                    switch ($IsExpired) {
-                        'True' { 
-                            if ( ([Math]::Abs($Timespan.Days)) -lt $StaleThreshold -and ([Math]::Abs($Timespan.Days)) -ge 0) {
-                                Write-Output "[$ClientName][ApplePush][MDM] Apple push cert expired $([Math]::Abs($Timespan.Days)) days ago"
-                            }
-                        }
-                        'False' { Write-Output "[$ClientName][ApplePush][MDM] Apple push cert expires in $($TimeSpan.Days) days" }
-                    }        
+                    Add-HTMLOutput   
                 }
                 'ExpiringSoonOnly' {
-                    if ($TimeSpan.Days -le $ThresholdDays) {
-                        switch ($IsExpired) {
-                            'True' { 
-                                if ( ([Math]::Abs($Timespan.Days)) -lt $StaleThreshold -and ([Math]::Abs($Timespan.Days)) -ge 0) {
-                                    Write-Output "[$ClientName][ApplePush][MDM] Apple push cert expired $([Math]::Abs($Timespan.Days)) days ago"
-                                }
-                            }
-                            'False' { Write-Output "[$ClientName][ApplePush][MDM] Apple push cert expires in $($TimeSpan.Days) days" }
-                        }
+                    if ($timespan.Days -gt $staleThreshold -and $timespan.Days -le $ThresholdDays) {
+                        Add-HTMLOutput
                     }        
                 }
                 'ExpiredOnly' {
-                    if ( $IsExpired ) {
-                        Write-Output "[$ClientName][ApplePush][MDM] Apple push cert expired $([Math]::Abs($Timespan.Days)) days ago"
+                    if ( $isExpired ) {
+                        if ( $timespan.Days -gt $staleThreshold ) {
+                            Add-HTMLOutput
+                        }
                     }
                 }
             }
-        }
-        catch {
+            Write-Output "[$clientName] Found ApplePush certificate"
+        } catch {
             # No Apple Push 
+            Write-Output "[$clientName] No ApplePush certificate found"
         }       
 
     }
 
     function Get-AzureAppRegExpirations {
         
+        $category = "AppReg"
         $appRegistrations = Invoke-MSGraphRequest -HttpMethod 'GET' -Url 'https://graph.microsoft.com/v1.0/applications'
-        $appRegistrations = $appRegistrations.Value | Sort-Object DisplayName
+        $appRegistrations = $appRegistrations.Value | Where-Object { $_.keyCredentials -ne $null -or $_.passwordCredentials -ne $null } | Sort-Object DisplayName
 
         # Iterate through every app
-        foreach ($App in $AppRegistrations) {
-
-            $AppName = $App.DisplayName + ":"
-            if ($AppName.Length -gt $strLengthThresold) {
-                $AppName = $AppName.subString(0, [System.Math]::Min($strLengthThresold, $AppName.Length)) + "...:"
-            }
-
-            # Only process apps that have secrets
-            if ( $App.passwordCredentials) {
-                # Additional for-each loop in case the app has multiple secrets
-                foreach ($Password in $App.passwordCredentials) {
-                    #$PasswordName = $Password.DisplayName
-
-                    $PasswordName = $Password.DisplayName
-
-                    if ($PasswordName.Length -gt $strLengthThresold) {
-                        $PasswordName = $PasswordName.subString(0, [System.Math]::Min($strLengthThresold, $PasswordName.Length)) + "..."
-                    }
-
-                    $PasswordExpiration = $Password.endDateTime
-                    $TimeSpan = New-TimeSpan -Start $Today -End $PasswordExpiration
-                    $IsExpired = ($Timespan.Days -lt 0)
-
+        foreach ($app in $appRegistrations) {
+            $appName = $app.DisplayName
+            if ( $app.passwordCredentials) { # Only process apps that have secrets
+                $objectType = "Secret"
+                foreach ($Password in $app.passwordCredentials) { # Loop through all secrets attached to the app
+                    $passwordName = $Password.DisplayName
+                    $objectName = $passwordName
+                    $passwordExpiration = $Password.endDateTime
+                    $timespan = New-TimeSpan -Start $today -End $passwordExpiration
+                    $isExpired = ($timespan.Days -lt 0)
                     # Output the results based on the scope parameter and timespan status
                     switch ($Scope) {
                         'All' {
-                            switch ($IsExpired) {
-                                'True' { 
-                                    if ( ([Math]::Abs($Timespan.Days)) -lt $StaleThreshold -and ([Math]::Abs($Timespan.Days)) -ge 0) {
-                                        Write-Output "[$ClientName][AppReg][Secret] $($AppName) secret $($PasswordName) expired $([Math]::Abs($Timespan.Days)) days ago"
-                                    }
-                                }
-                                'False' { Write-Output "[$ClientName][AppReg][Secret] $($AppName) secret $($PasswordName) expires in $($TimeSpan.Days) days" }
-                            }        
+                            Add-HTMLOutput
                         }
                         'ExpiringSoonOnly' {
-                            if ($TimeSpan.Days -le $ThresholdDays) {
-                                switch ($IsExpired) {
-                                    'True' { 
-                                        if ( ([Math]::Abs($Timespan.Days)) -lt $StaleThreshold -and ([Math]::Abs($Timespan.Days)) -ge 0) {
-                                            Write-Output "[$ClientName][AppReg][Secret] $($AppName) secret $($PasswordName) expired $([Math]::Abs($Timespan.Days)) days ago"
-                                        }
-                                    }
-                                    'False' { Write-Output "[$ClientName][AppReg][Secret] $($AppName) secret $($PasswordName) expires in $($TimeSpan.Days) days" }
-                                }
+                            if ($timespan.Days -gt $staleThreshold -and $timespan.Days -le $ThresholdDays) {
+                                Add-HTMLOutput
                             }        
                         }
                         'ExpiredOnly' {
-                            if ( $IsExpired ) {
-                                if ( ([Math]::Abs($Timespan.Days)) -lt $StaleThreshold -and ([Math]::Abs($Timespan.Days)) -ge 0) {
-                                    Write-Output "[$ClientName][AppReg][Secret] $($AppName) secret $($PasswordName) expired $([Math]::  Abs($Timespan.Days)) days ago"
+                            if ( $isExpired ) {
+                                if ( $timespan.Days -gt $staleThreshold ) {
+                                    Add-HTMLOutput
                                 }
                             }
-                            
                         }
                     }
                 }
-                if ( $App.keyCredentials) {
-                    # Additional for-each loop in case the app has multiple certificates
-                    foreach ($Certificate in $App.keyCredentials) {
-                        $CertificateName = $Certificate.DisplayName
-
-                        if ($CertificateName.Length -gt $strLengthThresold) {
-                            $CertificateName = $CertificateName.subString(0, [System.Math]::Min($strLengthThresold, $CertificateName.Length)) + "..."
-                        }
+                if ( $app.keyCredentials) {
+                    # Only process apps that have certificates
+                    $objectType = "Certificate"
+                    foreach ($certificate in $app.keyCredentials) {
+                        # Loop through all certificates attached to the app
+                        $certName = $certificate.DisplayName
+                        $objectName = $certName
                     
-                        $CertificateExpiration = $Certificate.endDateTime
-                        $TimeSpan = New-TimeSpan -Start $Today -End $CertificateExpiration
-                        $IsExpired = ($Timespan.Days -lt 0)
+                        $CertificateExpiration = $certificate.endDateTime
+                        $timespan = New-TimeSpan -Start $today -End $CertificateExpiration
+                        $isExpired = ($timespan.Days -lt 0)
 
                         # Output the results based on the scope parameter and timespan status
                         switch ($Scope) {
                             'All' {
-                                switch ($IsExpired) {
-                                    'True' { 
-                                        if ( ([Math]::Abs($Timespan.Days)) -lt $StaleThreshold -and ([Math]::Abs($Timespan.Days)) -ge 0) {
-                                            Write-Output "[$ClientName][AppReg][Cert] $($AppName) certificate $($CertificateName) expired $([Math]::Abs($Timespan.Days)) days ago"
-                                        }
+                                Add-HTMLOutput       
+                            }
+                            'ExpiringSoonOnly' {
+                                if ($timespan.Days -gt $staleThreshold -and $timespan.Days -le $ThresholdDays) {
+                                    Add-HTMLOutput
+                                }        
+                            }
+                            'ExpiredOnly' {
+                                if ( $isExpired ) {
+                                    if ( $timespan.Days -gt $staleThreshold ) {
+                                        Add-HTMLOutput
                                     }
-                                        'False' { Write-Output "[$ClientName][AppReg][Cert] $($AppName) certificate $($CertificateName) expires in $($TimeSpan.Days) days" }
-                                    }        
-                                }
-                                'ExpiringSoonOnly' {
-                                    if ($TimeSpan.Days -le $ThresholdDays) {
-                                        switch ($IsExpired) {
-                                            'True' { 
-                                                if ( ([Math]::Abs($Timespan.Days)) -lt $StaleThreshold -and ([Math]::Abs($Timespan.Days)) -ge 0) {
-                                                    Write-Output "[$ClientName][AppReg][Cert] $($AppName) certificate $($CertificateName) expired $([Math]::Abs($Timespan.Days)) days ago"
-                                                }
-                                            }
-                                                'False' { Write-Output "[$ClientName][AppReg][Cert] $($AppName) certificate $($CertificateName) expires in $($TimeSpan.Days) days" }
-                                            }
-                                        }        
-                                    }
-                                    'ExpiredOnly' {
-                                        if ( $IsExpired ) {
-                                            if ( ([Math]::Abs($Timespan.Days)) -lt $StaleThreshold -and ([Math]::Abs($Timespan.Days)) -ge 0) {
-                                                Write-Output "[$ClientName][AppReg][Cert] $($AppName) certificate $($CertificateName) expired $([Math]::Abs($Timespan.Days)) days ago"
-                                            }
-                                        }
-                                    }
-                                }
-                            }      
-                        }
-                    }
-
-                }
-            }
-
-                function Get-AzureEnterpriseAppExpirations {
-
-                    $EnterpriseApps = Invoke-MSGraphRequest -HttpMethod 'GET' -Url 'https://graph.microsoft.com/v1.0/servicePrincipals'
-                    $EnterpriseApps = $EnterpriseApps.Value | Sort-Object DisplayName
-
-                    # Iterate through every app
-                    foreach ($App in $EnterpriseApps) {
-
-                        $AppName = $App.DisplayName + ":"
-                        if ($AppName.Length -gt $strLengthThresold) {
-                            $AppName = $AppName.subString(0, [System.Math]::Min($strLengthThresold, $AppName.Length)) + "...:"
-                        }
-
-                        # Only process apps that have secrets
-                        if ( $App.passwordCredentials) {
-                            # Additional for-each loop in case the app has multiple secrets
-                            foreach ($Password in $App.passwordCredentials) {
-                                #$PasswordName = $Password.DisplayName
-
-                                $PasswordName = $Password.DisplayName
-
-                                if ($PasswordName.Length -gt $strLengthThresold) {
-                                    $PasswordName = $PasswordName.subString(0, [System.Math]::Min($strLengthThresold, $PasswordName.Length)) + "..."
-                                }
-
-                                $PasswordExpiration = $Password.endDateTime
-                                $TimeSpan = New-TimeSpan -Start (Get-Date) -End $PasswordExpiration
-                                $IsExpired = ($Timespan.Days -lt 0)
-
-                                # Output the results based on the scope parameter and timespan status
-                                switch ($Scope) {
-                                    'All' {
-                                        switch ($IsExpired) {
-                                            'True' { 
-                                                if ( ([Math]::Abs($Timespan.Days)) -lt $StaleThreshold -and ([Math]::Abs($Timespan.Days)) -ge 0) {
-                                                    Write-Output "[$ClientName][EntApp][Secret] $($AppName) secret $($PasswordName) expired $([Math]::Abs($Timespan.Days)) days ago"
-                                                }
-                                            }
-                                            'False' { Write-Output "[$ClientName][EntApp][Secret] $($AppName) secret $($PasswordName) expires in $($TimeSpan.Days) days" }
-                                        }        
-                                    }
-                                    'ExpiringSoonOnly' {
-                                        if ($TimeSpan.Days -le $ThresholdDays) {
-                                            switch ($IsExpired) {
-                                                'True' { 
-                                                    if ( ([Math]::Abs($Timespan.Days)) -lt $StaleThreshold -and ([Math]::Abs($Timespan.Days)) -ge 0) {
-                                                        Write-Output "[$ClientName][EntApp][Secret] $($AppName) secret $($PasswordName) expired $([Math]::Abs($Timespan.Days)) days ago"
-                                                    }
-                                                }
-                                                'False' { Write-Output "[$ClientName][EntApp][Secret] $($AppName) secret $($PasswordName) expires in $($TimeSpan.Days) days" }
-                                            }
-                                        }        
-                                    }
-                                    'ExpiredOnly' {
-                                        Write-Output "[$ClientName][EntApp][Secret] $($AppName) secret $($PasswordName) expired $([Math]::Abs($Timespan.Days)) days ago"
-                                    }
-                            
                                 }
                             }
                         }
-                        if ( $App.keyCredentials) {
-                            # Additional for-each loop in case the app has multiple certificates
-                            foreach ($Certificate in $App.keyCredentials) {
-                                $CertificateName = $Certificate.DisplayName
+                    }
+                }      
+            }
+        }
 
-                                if ($CertificateName.Length -gt $strLengthThresold) {
-                                    $CertificateName = $CertificateName.subString(0, [System.Math]::Min($strLengthThresold, $CertificateName.Length)) + "..."
-                                }
-                    
-                                $CertificateExpiration = $Certificate.endDateTime
-                                $TimeSpan = New-TimeSpan -Start (Get-Date) -End $CertificateExpiration
-                                $IsExpired = ($Timespan.Days -lt 0)
+    }
 
-                                # Output the results based on the scope parameter and timespan status
-                                switch ($Scope) {
-                                    'All' {
-                                        switch ($IsExpired) {
-                                            'True' { 
-                                                if ( ([Math]::Abs($Timespan.Days)) -lt $StaleThreshold -and ([Math]::Abs($Timespan.Days)) -ge 0) {
-                                                    Write-Output "[$ClientName][EntApp][Cert] $($AppName) certificate $($CertificateName) expired $([Math]::Abs($Timespan.Days)) days ago"
-                                                }
-                                            }
-                                            'False' { Write-Output "[$ClientName][EntApp][Cert] $($AppName) certificate $($CertificateName) expires in $($TimeSpan.Days) days" }
-                                        }        
-                                    }
-                                    'ExpiringSoonOnly' {
-                                        if ($TimeSpan.Days -le $ThresholdDays) {
-                                            switch ($IsExpired) {
-                                                'True' { 
-                                                    if ( ([Math]::Abs($Timespan.Days)) -lt $StaleThreshold -and ([Math]::Abs($Timespan.Days)) -ge 0) {
-                                                        Write-Output "[$ClientName][EntApp][Cert] $($AppName) certificate $($CertificateName) expired $([Math]::Abs($Timespan.Days)) days ago"
-                                                    }
-                                                }
-                                                'False' { Write-Output "[$ClientName][EntApp][Cert] $($AppName) certificate $($CertificateName) expires in $($TimeSpan.Days) days" }
-                                            }
-                                        }        
-                                    }
-                                    'ExpiredOnly' {
-                                        Write-Output "[$ClientName][EntApp][Cert] $($AppName) certificate $($CertificateName) expired $([Math]::Abs($Timespan.Days)) days ago"
+    function Get-AzureEnterpriseAppExpirations {
+
+        $category = "EnterpriseApp"
+        $enterpriseApps = Get-MgServicePrincipal -All:$true -Filter "ServicePrincipalType eq 'Application'"
+        foreach ($app in $enterpriseApps) {
+            $appName = $app.DisplayName
+            $objectType = "Secret"
+            if ( $appName -notLike "P2P Server") {
+                if ( $app.passwordCredentials) { # Only process apps that have secrets
+                    foreach ($Password in $app.passwordCredentials) { # Loop through all secrets attached to the app
+                        $passwordName = $Password.DisplayName
+                        $objectName = $passwordName
+                        $passwordExpiration = $Password.endDateTime
+                        $timespan = New-TimeSpan -Start (Get-Date) -End $passwordExpiration
+                        $isExpired = ($timespan.Days -lt 0)
+
+                        # Output the results based on the scope parameter and timespan status
+                        switch ($Scope) {
+                            'All' {
+                                Add-HTMLOutput      
+                            }
+                            'ExpiringSoonOnly' {
+                                if ($timespan.Days -gt $staleThreshold -and $timespan.Days -le $ThresholdDays) {
+                                    Add-HTMLOutput
+                                }        
+                            }
+                            'ExpiredOnly' {
+                                if ( $isExpired ) {
+                                    if ( $timespan.Days -gt $staleThreshold ) {
+                                        Add-HTMLOutput
                                     }
                                 }
-                            }      
+                            }
                         }
                     }
-      
+                    if ( $app.keyCredentials) { # Only process apps that have certificates
+                        $objectType = "Certificate"
+                        foreach ($Certificate in $app.keyCredentials) { # Loop through all certificates attached to the app
+                            $certName = $certificate.DisplayName
+                            $objectName = $certName
+                            $CertificateExpiration = $certificate.endDateTime
+                            $timespan = New-TimeSpan -Start (Get-Date) -End $CertificateExpiration
+                            $isExpired = ($timespan.Days -lt 0)
+
+                            # Output the results based on the scope parameter and timespan status
+                            switch ($Scope) {
+                                'All' {
+                                    Add-HTMLOutput     
+                                }
+                                'ExpiringSoonOnly' {
+                                    if ($timespan.Days -gt $staleThreshold -and $timespan.Days -le $ThresholdDays) {
+                                        Add-HTMLOutput
+                                    }        
+                                }
+                                'ExpiredOnly' {
+                                    if ( $isExpired ) {
+                                        if ( $timespan.Days -gt $staleThreshold ) {
+                                            Add-HTMLOutput
+                                        }
+                                    }
+                                }
+                            }
+                        }      
+                    }
                 }
-
-                foreach ( $ClientContext in $Client) {
-
-                    Set-CustomerContext $clientContext
-                    $Client = Get-CustomerContext
-                    $ClientName = $Client.CustomerName
-
-                    if ( $CheckApplePushCert ) { Get-ApplePushCertExpiration }
-                    if ( $CheckEnterpriseApp ) { Get-AzureAppRegExpirations }
-                    if ( $CheckAppReg ) { Get-AzureEnterpriseAppExpirations }
-                }
-    
             }
+        }
+    }
+
+    # Global Variables 
+    $staleThreshold = -90 # Ignore certificates or secrets that have expired greater than X days old to limit "white noise" (i.e application/service no longer being used)
+    $today = Get-Date
+    $output = New-Object System.Collections.Generic.List[System.Object]
+    $reportTitle = "Certificate/secret expiration report"
+
+    foreach ( $ClientContext in $Client) {
+        Set-CustomerContext $clientContext
+        $clientName = (Get-CustomerContext).CustomerName
+        Write-Output "[INFO] Changed client to $clientName"
+        if ( $CheckApplePushCert ) { 
+            Write-Output "[$clientName] Running ApplePush check"
+            Get-ApplePushCertExpiration
+        }
+        if ( 
+            $CheckEnterpriseApp ) {
+            Get-AzureEnterpriseAppExpirations
+            Write-Output "[$clientName] Running Enterprise app check"
+        }
+        if ( $CheckAppReg ) {
+            Get-AzureAppRegExpirations
+            Write-Output "[$clientName] Running App reg check"
+        }
+    }
+
+    $output | Out-SkyKickTableToHtmlReport -IncludePartnerLogo -ReportTitle $reportTitle -ReportFooter "Report created using SkyKick Cloud Manager" -OutTo NewTab
+    
+}

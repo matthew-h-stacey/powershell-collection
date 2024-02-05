@@ -14,43 +14,56 @@ function Get-AzureADStaleDirSyncStatus {
         [Int]$Threshold = 2
     )
     $results = New-Object System.Collections.Generic.List[System.Object]
+    Write-Output "Starting stale DirSync (Entra ID Connect) check script ..."
     
-    Foreach ( $Client in $Clients ) {
+    Foreach ( $client in $Clients ) {
 
-        Set-CustomerContext $Client
-        $ClientName = (Get-CustomerContext).CustomerName
+        Set-CustomerContext $client
+        $clientName = (Get-CustomerContext).CustomerName
 
-        $MsolCompanyInformation = Get-MsolCompanyInformation
+        $isConnected = Get-ConnectorStatus -ConnectorName office365
+        if ( $isConnected ) {
+            $msolCompanyInformation = Get-msolCompanyInformation
+            if ( $msolCompanyInformation.DirectorySynchronizationEnabled -eq $True ) {
 
-        if ( $MsolCompanyInformation.DirectorySynchronizationEnabled -eq $True ) {
+                $lastSync = $msolCompanyInformation.LastDirSyncTime
+                $timeDifference = New-TimeSpan -Start $lastSync -End (Get-Date)
+        
+                if ($timeDifference.TotalHours -gt $Threshold) {
 
-            $LastSync = $MsolCompanyInformation.LastDirSyncTime
-            $TimeDifference = New-TimeSpan -Start $LastSync -End (Get-Date)
-	
-            if ($TimeDifference.TotalHours -gt $Threshold) {
+                    $StaleSyncObject = [PSCustomObject]@{
+                        Client                  = $clientName
+                        SyncServer              = $msolCompanyInformation.DirSyncClientMachineName
+                        LastDirSyncTime         = $msolCompanyInformation.LastDirSyncTime
+                        LastPasswordSyncTime    = $msolCompanyInformation.LastPasswordSyncTime
+                        Status                  = "Stale"
+                    }
 
-                $StaleSyncObject = [PSCustomObject]@{
-                    Client               = $ClientName
-                    SyncServer           = $MsolCompanyInformation.DirSyncClientMachineName
-                    LastDirSyncTime      = $MsolCompanyInformation.LastDirSyncTime
-                    LastPasswordSyncTime	= $MsolCompanyInformation.LastPasswordSyncTime
+                    $results.Add($StaleSyncObject)
+                    Write-Output "[$clientName] DirSync Status: STALE. Last sync: $lastSync"
+
+                } else {
+                    Write-Output "[$clientName] DirSync Status: OK"
                 }
-
-                $results.Add($StaleSyncObject)
-
+                
             }
-            else {
-                Write-Output "[DirSync Status] ${ClientName}: OK"
+        } else {
+            $StaleSyncObject = [PSCustomObject]@{
+                Client                  = $clientName
+                SyncServer              = "N/A"
+                LastDirSyncTime         = "N/A"
+                LastPasswordSyncTime    = "N/A"
+                Status                  = "Unable to determine DirSync status. Please check the SkyKick connectors for this client and try again"
             }
-            
+            $results.Add($StaleSyncObject)
+            Write-Output "[$clientName] DirSync Status: UNKNOWN. Unable to determine DirSync status. Please check the SkyKick connectors for this client and try again"
         }
     
     }
 
     if ( $results) {
         $results | Out-SkyKickTableToHtmlReport -IncludePartnerLogo -ReportTitle "Stale DirSync Report" -ReportFooter "Report created using SkyKick Cloud Manager" -OutTo NewTab
-    }
-    else {
+    } else {
         Write-Output "No stale DirSync status detected"
     }
 

@@ -33,5 +33,4 @@ foreach ($User in $CSV) {
     }
 
     C:\Scripts\Create-ADUser.ps1 @trimmedParams
-    Read-Host -Prompt "Press Enter to exit"
 }

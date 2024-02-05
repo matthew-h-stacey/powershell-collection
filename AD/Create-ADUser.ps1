@@ -218,11 +218,11 @@ function Write-LogAndOutput {
     param (
         [Parameter(Mandatory = $True)]
         [String]
-        $LogString
+        $Message
     )
 
-    Write-Log $LogString -LogFile $logFile
-    Write-Output $LogString
+    Write-Log $Message -LogFile $logFile
+    Write-Output $Message
 
 }
 
@@ -311,10 +311,10 @@ function Find-ADUser {
         }
     }
     if ( !$user ) {
-        Write-LogAndOutput -Message "[ERROR] Unable to locate a user with provided input: $Identity. Please verify that you entered the correct samAccountName/DisplayName/UserPrincipalName of an existing user and try again." -LogFile $logFile
+        Write-LogAndOutput -Message "[ERROR] Unable to locate a user with provided input: $Identity. Please verify that you entered the correct samAccountName/DisplayName/UserPrincipalName of an existing user and try again."
         exit 1
     } elseif ( $user.Count -gt 1 ) {
-        Write-LogAndOutput -Message "[ERROR] More than one user located with the provided input: $Identity. Please try a more descriptive identifier and try again (ex: UserPrincipalName versus DisplayName)" -LogFile $logFile
+        Write-LogAndOutput -Message "[ERROR] More than one user located with the provided input: $Identity. Please try a more descriptive identifier and try again (ex: UserPrincipalName versus DisplayName)"
         exit 1
     }
     $user
@@ -620,21 +620,21 @@ function Set-ADUserParams {
     # Add the user's pager and IP phone, if present
     if ( $Pager ) { $otherAttributes.Pager = $Pager }
     if ( $IpPhone ) { $otherAttributes.IpPhone = $IpPhone }
-    if ( $otherAttributes ) { $params.otherAttributes = $otherAttributes }
+    if ( $otherAttributes.Keys.Count -gt 0 ) { $params.otherAttributes = $otherAttributes }
 
     $params
     
 }
 
 ### Logging
-$logFile = "C:\Scripts\Create-ADUser.log"
+$logFile = "C:\Scripts\Create-ADUser_$($SamAccountName).log"
 Write-Output "Log file: $logfile"
 Write-Log -Message "[START] Starting processing for user: $UserPrincipalName" -LogFile $logFile
 
 # Construct $params and attempt to create the user account
 $params = Set-ADUserParams
 try {
-    Write-LogAndOutput -LogString "[INFO] Attempting to create new user: $($params.samAccountName)"
+    Write-LogAndOutput -Message "[INFO] Attempting to create new user: $($params.samAccountName)"
     New-ADUser @params
     Write-LogAndOutput "[INFO] Successfully created new user"
 } catch [System.UnauthorizedAccessException] {
