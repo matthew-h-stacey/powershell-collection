@@ -18,3 +18,20 @@ function Test-Input {
 
 # Example usage with invalid input
 Test-Input -ZipCode "1234A"
+
+#########################################
+
+function Validate-YesOrNo {
+    param (
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("yes", "no")]
+        [string]$Choice
+    )
+
+    # Rest of your script/function logic goes here
+    Write-Host "You chose: $Choice"
+}
+
+# Example usage:
+Validate-YesOrNo -Choice "yes"
+Validate-YesOrNo -Choice "no"
