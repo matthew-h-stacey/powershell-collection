@@ -155,13 +155,12 @@ function Get-AADUserReport {
 	)
 
     # Return one array ($MSGraphOutput) with all objects, supporting count past the default 999
-    $Method = "GET"
-    $Uri = 'https://graph.microsoft.com/beta/users?$select=DisplayName,UserPrincipalName,Mail,UserType,AccountEnabled,onPremisesSyncEnabled,signInActivity,AssignedLicenses,LastPasswordChangeDateTime,CompanyName,EmployeeId,Department,JobTitle,StreetAddress,City,State,Country,BusinessPhones,MobilePhone&$top=999'
+    $URI = 'https://graph.microsoft.com/beta/users?$select=DisplayName,UserPrincipalName,Mail,UserType,AccountEnabled,onPremisesSyncEnabled,signInActivity,AssignedLicenses,LastPasswordChangeDateTime,CompanyName,EmployeeId,Department,JobTitle,StreetAddress,City,State,Country,BusinessPhones,MobilePhone&$top=999'
     $MSGraphOutput = @()
     $nextLink = $null
     do {
-        $Uri = if ($nextLink) { $nextLink } else { $Uri }
-        $response = Invoke-MgGraphRequest -Uri $Uri -Method $Method
+        $uri = if ($nextLink) { $nextLink } else { $URI }
+        $response = Invoke-MgGraphRequest -Uri $uri -Method GET
         $output = $response.Value
         $MSGraphOutput += $output
         $nextLink = $response.'@odata.nextLink'
