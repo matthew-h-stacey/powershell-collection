@@ -1,4 +1,14 @@
 <#
+.SYNOPSIS
+Use a CSV to bulk update Entra ID user properties
+
+.EXAMPLE
+1) Update $propertiesToUpdate to include the properties that need to be updated from the CSV
+2) Update-AzureADUserProperties.ps1 -CsvPath C:\TempPath\input.csv -UserIdentifier UserPrincipalName -ExportPath C:\TempPath
+
+.NOTES
+To Do:
+[ ] Replace $propertiesToUpdate with a dynamic approach of checking headers in a CSV and pulling all except $UserIdentifier
 #>
 
 param (
@@ -209,7 +219,7 @@ $skippedUsers = New-Object System.Collections.Generic.List[System.Object]
 $errorLog = New-Object System.Collections.Generic.List[System.Object]
 
 # Array to define the properties to update. Note: the columns from the CSV need to match these exactly. Additional supported fields from Set-AzureADUser can be added if needed
-$propertiesToUpdate = @("JobTitle", "Department", "PhysicalDeliveryOfficeName","OtherMails","Manager")
+$propertiesToUpdate = @("JobTitle", "Department", "PhysicalDeliveryOfficeName", "OtherMails", "Manager")
 ####################################
 
 
