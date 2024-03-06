@@ -1,130 +1,225 @@
-# Function to create a full user properties backup prior to making changes
-function Get-AzureADUserPropertiesBackup {
-    $Backup = New-Object System.Collections.Generic.List[System.Object]
-    $AllAzureADUsers = Get-AzureADUser -All:$true
-    foreach ( $User in $AllAzureADUsers) {
+<#
+#>
+
+param (
+    # Path of CSV
+    [Parameter(Mandatory=$true)]
+    [String]
+    $CsvPath,
+
+    # This is the identifier in the CSV file. Typically this should be UserPrincipalName, but may be PrimarySmtpAddress or other property depending on what is provided
+    [Parameter(Mandatory=$true)]
+    [String]
+    $UserIdentifier,
+
+    # Directory to export to (ex: C:\TempPath)
+    [Parameter(Mandatory=$true)]
+    [String]
+    $ExportPath,
+
+    # Directory to export to (ex: C:\TempPath)
+    [Parameter(Mandatory = $false)]
+    [Switch]
+    $WhatIf
+)
+
+function Export-AzureADUserPropertiesBackup {
+
+    <#
+    .SYNOPSIS
+    Export a backup of relevant user properties
+
+    .EXAMPLE
+    Export-AzureADUserPropertiesBackup
+    #>
+
+    $backup = New-Object System.Collections.Generic.List[System.Object]
+    $allAzureADUsers = Get-AzureADUser -All:$true
+    foreach ( $user in $allAzureADUsers) {
         # Retrieve the email address. Requires separate call to EXO vs. pulling from AAD user object
         try {
-            $PrimarySmtpAddress = (Get-Mailbox -Identity $User.UserPrincipalName -ErrorAction Stop).PrimarySmtpAddress 
-        }
-        catch {
+            $primarySmtpAddress = (Get-Mailbox -Identity $user.UserPrincipalName -ErrorAction Stop).PrimarySmtpAddress 
+        } catch {
             # User does not have a mailbox
-            $PrimarySmtpAddress = "N/A"
+            $primarySmtpAddress = "N/A"
         }
-        $UserObject = [PSCustomObject]@{
-            DisplayName        = $User.DisplayName
-            UserPrincipalName  = $User.UserPrincipalName
-            PrimarySmtpAddress = $PrimarySmtpAddress
-            Department         = $User.Department
-            JobTitle           = $User.JobTitle
-            Manager            = (Get-AzureADUserManager -ObjectId $User.UserPrincipalName).UserPrincipalName
+        $userObject = [PSCustomObject]@{
+            DisplayName        = $user.DisplayName
+            UserPrincipalName  = $user.UserPrincipalName
+            PrimarySmtpAddress = $primarySmtpAddress
+            Department         = $user.Department
+            JobTitle           = $user.JobTitle
+            Manager            = (Get-AzureADUserManager -ObjectId $user.UserPrincipalName).UserPrincipalName
         }
-        $Backup.Add($UserObject)
+        $backup.Add($userObject)
     }
-    $BackupFile = "$WorkDirectory\AzureAD_user_property_backup_$((Get-Date -Format "MM-dd-yyyy_HHmm")).csv"
-    $Backup | Export-Csv $BackupFile -NoTypeInformation
-    Write-Output "[INFO] Backup completed successfully. File saved to: $BackupFile"
+    $backupFile = "$ExportPath\AzureAD_user_property_backup_$((Get-Date -Format "MM-dd-yyyy_HHmm")).csv"
+    $backup | Export-Csv $backupFile -NoTypeInformation
+    Write-Output "[INFO] Backup completed successfully. File saved to: $backupFile"
+
 }
+function Update-Property {
 
-# Function to handle Property updates
-function Update-Property($User, $Property, $NewValue) {
-    
-    # For all properties except manager, retrieve the current value and store it as $OldValue
-    # If $OldValue doesn't exist, instead label it as "N/A"
-    # This excludes "Manager" because Manager requires a specific cmdlet to pull the property (ex: $User.Manager is not a valid property)
-    if ( $Property -notLike "Manager" ) {
-        $OldValue = $User.$Property
-        if (!$OldValue) { $OldValue = "N/A" }
+    [CmdletBinding()]
+    param (
+        # The Azure AD user object to be passed to the function
+        [Parameter(Mandatory=$true, Position=0)]
+        [Object[]]$userObject,
+
+        # The property to update
+        [Parameter(Mandatory=$true, Position=1)]
+        [string]$property,
+
+        # The new value for the property
+        [Parameter(Mandatory=$true, Position=2)]
+        [string]$newValue,
+
+        # Optional parameter to record changes but not actually make them
+        [Parameter(Mandatory=$false)]
+        [switch]$WhatIf
+    )
+
+    <#
+    .SYNOPSIS
+    Executes the property update for a given user
+
+    .DESCRIPTION
+    TBD
+
+    .EXAMPLE
+    Update-Property (Get-AzureADUser -ObjectId jsmith@contoso.com) Department Sales
+    #>
+
+    # For all properties except manager, retrieve the current value and store it as $oldValue. If $oldValue doesn't exist, instead label it as "N/A"
+    # This excludes "Manager" because Manager requires a specific cmdlet to pull the property (ex: $user.Manager is not a valid property)
+    if ( $property -notLike "Manager" ) {
+        $oldValue = $userObject.$property
+        if (!$oldValue) { 
+            $oldValue = "N/A"
+        }
     }
 
-    # Custom update action based on the Property
-    switch ($Property) {
+    # Take specific action based on the property
+    switch ($property) {
         "Manager" {
             # Retrieve the current/old Manager UPN. If there is no Manager, set the value to "(None)"
-            $CurrentManager = Get-AzureADUserManager -ObjectId $User.UserPrincipalName
-            $OldValue = ($CurrentManager).UserPrincipalName
-            if ( !$OldValue ) { $OldValue = "(None)" }
-            
-            # NewValue is the Manager's AzureAD object
-            $NewManager = Get-AzureADUser -ObjectId $NewValue
-            $NewValue = $NewManager.UserPrincipalName
-            
-            # Set the new manager
-            try {
-                Set-AzureADUserManager -ObjectId $User.UserPrincipalName -RefObjectId $NewManager.ObjectId
-                Write-Output "[INFO] $($User.UserPrincipalName): Manager updated from $OldValue -> $NewValue"
+            $currentManager = Get-AzureADUserManager -ObjectId $userObject.UserPrincipalName
+            $oldValue = ($currentManager).UserPrincipalName
+            if ( !$oldValue ) { 
+                $oldValue = "(None)"
             }
-            catch {
-                $ErrorMessage = "[ERROR] $($User.UserPrincipalName): Failed to update the user's manager. Error: $($_.Exception.Message)"
-                Write-Output $ErrorMessage
-                $ErrorLog.Add($ErrorMessage)
+            $newManager = Get-AzureADUser -ObjectId $newValue
+            if ( $newManager.UserPrincipalName -eq $oldValue) {
+                Write-Output "[INFO] $($userObject.UserPrincipalName): No change to Manager"
+                $changed = $False
+            } else {
+                # Set the new manager
+                try {
+                    if ( $WhatIf) {
+                        Write-Output "[INFO][WHATIF] $($userObject.UserPrincipalName): Manager updated from $oldValue -> $($newManager.UserPrincipalName)"
+                    } else {
+                        Set-AzureADUserManager -ObjectId $userObject.UserPrincipalName -RefObjectId $newManager.ObjectId
+                        Write-Output "[INFO] $($userObject.UserPrincipalName): Manager updated from $oldValue -> $($newManager.UserPrincipalName)"
+                    }
+                    $changed = $True
+                }
+                catch {
+                    $errorMessage = "[ERROR] $($userObject.UserPrincipalName): Failed to update the user's manager. Error: $($_.Exception.Message)"
+                    Write-Output $errorMessage
+                    $errorLog.Add($errorMessage)
+                    $changed = $False
+                }
             }
-
         }
         default {
             # This portion of the switch is for all other generic properties that are set via Set-AzureADUser (ex: Department, JobTitle, etc.)
-            $params = @{
-                $Property = $NewValue
-            }
-            try {
-                Set-AzureADUser -ObjectId $User.ObjectId @params
-                Write-Output "[INFO] $($User.UserPrincipalName): $Property updated from $OldValue -> $NewValue"
-            }
-            catch {
-                $ErrorMessage = "[ERROR] $($User.UserPrincipalName): Failed to update the $PropertyName. Error: $($_.Exception.Message)"
-                Write-Output $ErrorMessage
-                $ErrorLog.Add($ErrorMessage)
+            if ( $userObject.$property -eq $newValue) {
+                Write-Output "[INFO] $($userObject.UserPrincipalName): No change to $property"
+                $changed = $False
+            } else {
+                $params = @{
+                    $property = $newValue
+                }
+                try {
+                    if ( $WhatIf) {
+                        Write-Output "[INFO][WHATIF] $($userObject.UserPrincipalName): $property updated from $oldValue -> $newValue"
+                    } else {
+                        Set-AzureADUser -ObjectId $userObject.ObjectId @params
+                        Write-Output "[INFO] $($userObject.UserPrincipalName): $property updated from $oldValue -> $newValue"
+                    }
+                    $changed = $True
+                }
+                catch {
+                    $errorMessage = "[ERROR] $($userObject.UserPrincipalName): Failed to update the $propertyName. Error: $($_.Exception.Message)"
+                    Write-Output $errorMessage
+                    $errorLog.Add($errorMessage)
+                    $changed = $False
+                }
             }
         }
     }
-    $OutputObject = [PSCustomObject]@{
-        UserPrincipalName   = $User.UserPrincipalName
-        Property            = $Property
-        OldValue            = $OldValue
-        NewValue            = $NewValue
+    $outputObject = [PSCustomObject]@{
+        UserPrincipalName   = $userObject.UserPrincipalName
+        Property            = $property
+        OldValue            = $oldValue
+        NewValue            = $newValue
+        ValueChanged        = $changed
     }
-    $Results.Add($OutputObject)
+    $results.Add($outputObject)
 }
+function Start-PropertyUpdateWorkflow {
+    param(
+        # Array of user objects
+        [Parameter(Mandatory=$true)]
+        [Object[]]
+        $CSV
+    )
 
-# Import the provided CSV with the users to update
-$WorkDirectory = "C:\TempPath"
-$CsvUsers = Import-Csv $WorkDirectory\users.csv
+    # Iterate through users and update properties as needed
+    foreach ($user in $CSV) {
+        try {
+            $AADUser = Get-AzureADUser -ObjectId $user.$UserIdentifier
+        } catch {
+            Write-Output "[WARNING] $($user.$UserIdentifier): SKIPPED, unable to find user"    
+            $skippedUser = $user.$UserIdentifier
+            $skippedUsers.Add($skippedUser)
+            continue
+        }
 
-# Set this to the be the identifier in the CSV file. Typically this should be UserPrincipalName, but may be PrimarySmtpAddress or other property depending on what is provided
-$UserIdentifier = "UserPrincipalName"
-
-# Create lists to store output
-$Results = New-Object System.Collections.Generic.List[System.Object]
-$SkippedUsers = New-Object System.Collections.Generic.List[System.Object]
-$ErrorLog = New-Object System.Collections.Generic.List[System.Object]
-
-# First take a backup
-Get-AzureADUserPropertiesBackup
-
-# Define the properties to update. Note: the columns from the CSV need to match these exactly. Additional supported fields from Set-AzureADUser can be added if needed
-$propertiesToUpdate = @("City", "CompanyName", "Department", "JobTitle", "Mobile", "PostalCode", "State", "StreetAddress", "Manager")
-
-# Iterate through the CSV and update properties as needed
-foreach ($CsvUser in $CsvUsers) {
-    try {
-        $AADUser = Get-AzureADUser -ObjectId $CsvUser.$UserIdentifier
-    }
-    catch {
-        Write-Output "[WARNING] $($CsvUser.$UserIdentifier): SKIPPED, unable to find user"    
-        $SkippedUser = $CsvUser.$UserIdentifier
-        $SkippedUsers.Add($SkippedUser)
-        continue
-    }
-
-    # Iterate over the properties to update
-    foreach ($property in $propertiesToUpdate) {
-        if ($CsvUser.$property) {
-            Update-Property $AADUser $property $CsvUser.$property
+        # Iterate over the properties to update
+        foreach ($property in $propertiesToUpdate) {
+            if ($user.$property) {
+                Update-Property -userObject $AADUser -Property $property -newValue $user.$property
+            }
         }
     }
+
 }
 
-# Output the results
-$ResultsOutput = "$WorkDirectory\AzureAD_user_property_changes.csv"
-$Results | Export-Csv $ResultsOutput -NoTypeInformation
-Write-Output "[INFO] Exported change log to: $ResultsOutput"
+############ Variables #############
+
+# Report name/location
+$resultsOutput = "$ExportPath\AzureAD_user_property_changes.csv"
+$skippedUsersOutput = "$ExportPath\AzureAD_user_property_changes_skippedUsers.txt"
+$errorLogOutput = "$ExportPath\AzureAD_user_property_changes_errors.txt"
+
+# Empty lists to store results
+$results = New-Object System.Collections.Generic.List[System.Object]
+$skippedUsers = New-Object System.Collections.Generic.List[System.Object]
+$errorLog = New-Object System.Collections.Generic.List[System.Object]
+
+# Array to define the properties to update. Note: the columns from the CSV need to match these exactly. Additional supported fields from Set-AzureADUser can be added if needed
+$propertiesToUpdate = @("JobTitle", "Department", "PhysicalDeliveryOfficeName","OtherMails","Manager")
+####################################
+
+
+############ Execution #############
+
+#Export-AzureADUserPropertiesBackup
+Start-PropertyUpdateWorkflow -CSV (Import-Csv $CsvPath)
+$results | Export-Csv $resultsOutput -NoTypeInformation
+$skippedUsers | Out-File $skippedUsersOutput
+$errorLog | Out-File $errorLogOutput
+Write-Output "[INFO] Exported change log to: $resultsOutput"
+
+####################################
