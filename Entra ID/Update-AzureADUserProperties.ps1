@@ -43,6 +43,7 @@ function Export-AzureADUserPropertiesBackup {
     Export-AzureADUserPropertiesBackup
     #>
 
+    Write-Output "[INFO] Starting Azure AD user property backup/export. Please note, this can take a while depending on the amount of users ..."
     $backup = New-Object System.Collections.Generic.List[System.Object]
     $allAzureADUsers = Get-AzureADUser -All:$true
     foreach ( $user in $allAzureADUsers) {
@@ -225,7 +226,7 @@ $propertiesToUpdate = @("JobTitle", "Department", "PhysicalDeliveryOfficeName", 
 
 ############ Execution #############
 
-#Export-AzureADUserPropertiesBackup
+Export-AzureADUserPropertiesBackup
 Start-PropertyUpdateWorkflow -CSV (Import-Csv $CsvPath)
 $results | Export-Csv $resultsOutput -NoTypeInformation
 $skippedUsers | Out-File $skippedUsersOutput
