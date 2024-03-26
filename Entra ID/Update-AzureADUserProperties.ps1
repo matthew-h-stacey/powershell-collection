@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
 Use a CSV to bulk update Entra ID user properties
+The script will automaticallyt try to update all columns except $UserIdentifier. Ensure that all other headers are supported properties to update using Set-ADUser
 
 .EXAMPLE
 1) Update $propertiesToUpdate to include the properties that need to be updated from the CSV
@@ -8,7 +9,8 @@ Use a CSV to bulk update Entra ID user properties
 
 .NOTES
 To Do:
-[ ] Replace $propertiesToUpdate with a dynamic approach of checking headers in a CSV and pulling all except $UserIdentifier
+[ ] Update backup function to only back up the provided users instead of the entire tenant
+[ ] Add option in Start-PropertyUpdateWorkflow to accept blank values to replace what is in Entra ID
 #>
 
 param (
@@ -27,7 +29,7 @@ param (
     [String]
     $ExportPath,
 
-    # Directory to export to (ex: C:\TempPath)
+    # Record changes but don't actually make them
     [Parameter(Mandatory = $false)]
     [Switch]
     $WhatIf
@@ -69,6 +71,7 @@ function Export-AzureADUserPropertiesBackup {
     Write-Output "[INFO] Backup completed successfully. File saved to: $backupFile"
 
 }
+
 function Update-Property {
 
     [CmdletBinding()]
@@ -178,26 +181,46 @@ function Update-Property {
     }
     $results.Add($outputObject)
 }
+
 function Start-PropertyUpdateWorkflow {
+
+    <#
+    .SYNOPSIS
+    Pulls in a CSV and iterates through it to retrieve user objects, then calls a separate function to update each property
+
+    .EXAMPLE
+    Start-PropertyUpdateWorkflow -CSV (Import-Csv $CsvPath)
+    #>
+
+
     param(
-        # Array of user objects
+        # Path to the CSV
         [Parameter(Mandatory=$true)]
-        [Object[]]
-        $CSV
+        [String]
+        $CSV,
+
+        # This is the identifier in the CSV file. Typically this should be UserPrincipalName, but may be PrimarySmtpAddress or other property depending on what is provided
+        [Parameter(Mandatory = $true)]
+        [String]
+        $UserIdentifier
     )
 
+    $csvUsers = Import-Csv -Path $CSV 
+    $propertiesToUpdate = $csvUsers | Get-Member -MemberType NoteProperty | Where-Object { $_.Name -notLike $userIdentifier } | Select-Object -ExpandProperty Name
+    $csvUsers = $csvUsers | Select-Object -Property $propertiesToUpdate
+
     # Iterate through users and update properties as needed
-    foreach ($user in $CSV) {
+    foreach ($user in $csvUsers) {
         try {
             $AADUser = Get-AzureADUser -ObjectId $user.$UserIdentifier
         } catch {
-            Write-Output "[WARNING] $($user.$UserIdentifier): SKIPPED, unable to find user"    
+            Write-Output "[WARNING] $($user.$UserIdentifier): SKIPPED, unable to find an Entra ID user using provided the identifier"    
             $skippedUser = $user.$UserIdentifier
             $skippedUsers.Add($skippedUser)
             continue
         }
 
-        # Iterate over the properties to update
+        # Iterate over the properties to update. Note: If the value is empty/not provided it will NOT overwrite an existing value
         foreach ($property in $propertiesToUpdate) {
             if ($user.$property) {
                 Update-Property -userObject $AADUser -Property $property -newValue $user.$property
@@ -206,31 +229,41 @@ function Start-PropertyUpdateWorkflow {
     }
 
 }
+function Export-Results {
+    if ( $results ) {
+        $results | Export-Csv $resultsOutput -NoTypeInformation
+        Write-Output "[INFO] Exported results to: $resultsOutput"
+    }
+    if ( $skippedUsers ) {
+        $skippedUsers | Out-File $skippedUsersOutput
+        Write-Output "[INFO] Some users were skipped, please review $skippedUsersOutput. Users may not have been matched with the specified UserIdentifier"
+    }
+    if ( $errorLog ) { 
+        $errorLog | Out-File $errorLogOutput
+        Write-Output "[INFO] Error log exported to: $errorLogOutput"
+    }
+}
 
 ############ Variables #############
 
 # Report name/location
-$resultsOutput = "$ExportPath\AzureAD_user_property_changes.csv"
-$skippedUsersOutput = "$ExportPath\AzureAD_user_property_changes_skippedUsers.txt"
-$errorLogOutput = "$ExportPath\AzureAD_user_property_changes_errors.txt"
+$resultsOutput = "$ExportPath\AzureAD_user_property_changes_$((Get-Date -Format "MM-dd-yyyy_HHmm")).csv"
+$skippedUsersOutput = "$ExportPath\AzureAD_user_property_changes_skippedUsers_$((Get-Date -Format "MM-dd-yyyy_HHmm")).txt"
+$errorLogOutput = "$ExportPath\AzureAD_user_property_changes_errors_$((Get-Date -Format "MM-dd-yyyy_HHmm")).txt"
 
 # Empty lists to store results
 $results = New-Object System.Collections.Generic.List[System.Object]
 $skippedUsers = New-Object System.Collections.Generic.List[System.Object]
 $errorLog = New-Object System.Collections.Generic.List[System.Object]
 
-# Array to define the properties to update. Note: the columns from the CSV need to match these exactly. Additional supported fields from Set-AzureADUser can be added if needed
-$propertiesToUpdate = @("JobTitle", "Department", "PhysicalDeliveryOfficeName", "OtherMails", "Manager")
+
 ####################################
 
 
 ############ Execution #############
 
 Export-AzureADUserPropertiesBackup
-Start-PropertyUpdateWorkflow -CSV (Import-Csv $CsvPath)
-$results | Export-Csv $resultsOutput -NoTypeInformation
-$skippedUsers | Out-File $skippedUsersOutput
-$errorLog | Out-File $errorLogOutput
-Write-Output "[INFO] Exported change log to: $resultsOutput"
+Start-PropertyUpdateWorkflow -CSV $CsvPath -UserIdentifier $UserIdentifier
+Export-Results
 
 ####################################
