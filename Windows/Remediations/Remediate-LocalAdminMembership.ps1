@@ -28,7 +28,7 @@ function Get-LocalAdmins {
 
     <#
     .SYNOPSIS
-    Retrieve a list of local admins (not including SID objects which are commonly unrecognized user accounts or Azure AD roles/groups)
+    Retrieve a list of local admins, excluding: Domain Admins, SID objects which are commonly unrecognized user accounts or Azure AD roles/groups
     
     .EXAMPLE
     $localAdmins = Get-LocalAdmins
@@ -38,7 +38,7 @@ function Get-LocalAdmins {
     $localAdmins = ([ADSI]"WinNT://./Administrators").psbase.Invoke('Members') | ForEach-Object {
         ([ADSI]$_).InvokeGet('AdsPath')
     }
-    $localAdminList = $localAdmins -replace 'WinNT://', '' -replace '/', '\' | Where-Object { $_ -notlike "S-1*" }
+    $localAdminList = $localAdmins -replace 'WinNT://', '' -replace '/', '\' | Where-Object { $_ -notlike "S-1*" -and $_ -notlike "*Domain Admins" }
     $localAdminList
 
 }
