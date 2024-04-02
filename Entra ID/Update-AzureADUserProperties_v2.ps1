@@ -194,7 +194,7 @@ function Start-PropertyUpdateWorkflow {
 
     param(
         # Path to the CSV
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [String]
         $CSV,
 
@@ -205,14 +205,24 @@ function Start-PropertyUpdateWorkflow {
     )
 
     $csvUsers = Import-Csv -Path $CSV 
-    $propertiesToUpdate = $csvUsers | Get-Member -MemberType NoteProperty | Where-Object { $_.Name -notLike $userIdentifier } | Select-Object -ExpandProperty Name
+    $propsExclIdentifier = $csvUsers | Get-Member -MemberType NoteProperty | Where-Object { $_.Name -notLike $userIdentifier } | Select-Object -ExpandProperty Name 
+    $propsInclIdentifier = $csvUsers | Get-Member -MemberType NoteProperty | Select-Object -ExpandProperty Name
     $backup = @()
 
-    # TESTING START
     $csvUsers  | ForEach-Object {
         try {
-            $mgUser = Get-MgUser -UserId $_.$UserIdentifier -Property $propertiesToUpdate
-            $backup += ($mgUser | Select-Object $propertiesToUpdate)
+            $mgUser = Get-MgUser -UserId $_.$UserIdentifier -Property $propsInclIdentifier  | Select-Object $propsInclIdentifier
+            $userProps = [ordered]@{}
+            foreach ($property in $mgUser.psobject.properties) {                
+                # if ( $property.TypeNameOfValue -is [System.String[]]) {
+                if ( $property.Value -is [System.String[]]) {
+                    $userProps[$property.Name] = $property.Value -join ', '
+                } else {
+                    $userProps[$property.Name] = $property.Value                    
+                }
+            }
+            $backup += New-Object PSObject -Property $userProps
+
         } catch {
             Write-Output "[WARNING] $($_.$UserIdentifier): SKIPPED, unable to find an Entra ID user using provided the identifier"    
             $skippedUser = $_.$UserIdentifier
@@ -221,28 +231,14 @@ function Start-PropertyUpdateWorkflow {
         }
     }
     $backup | Export-Csv $backupFile -NoTypeInformation
-    # TESTING STOP
-}
-    
-    # Iterate through users and update properties as needed
-    foreach ($user in $csvUsers) {
-        try {
-            $AADUser = Get-AzureADUser -ObjectId $user.$UserIdentifier
-        } catch {
-            Write-Output "[WARNING] $($user.$UserIdentifier): SKIPPED, unable to find an Entra ID user using provided the identifier"    
-            $skippedUser = $user.$UserIdentifier
-            $skippedUsers.Add($skippedUser)
-            continue
-        }
+    Write-Output "[INFO] Exported property backup to: $backup"
 
-        # Iterate over the properties to update. Note: If the value is empty/not provided it will NOT overwrite an existing value
-        foreach ($property in $propertiesToUpdate) {
-            if ($user.$property) {
-                Update-Property -userObject $AADUser -Property $property -newValue $user.$property
-            }
+    # Iterate over the properties to update. Note: If the value is empty/not provided it will NOT overwrite an existing value
+    foreach ($property in $propsExclIdentifier) {
+        if ($user.$property) {
+            Update-Property -userObject $AADUser -Property $property -newValue $user.$property
         }
     }
-
 }
 
 function Export-Results {
