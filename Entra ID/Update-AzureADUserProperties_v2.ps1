@@ -206,8 +206,24 @@ function Start-PropertyUpdateWorkflow {
 
     $csvUsers = Import-Csv -Path $CSV 
     $propertiesToUpdate = $csvUsers | Get-Member -MemberType NoteProperty | Where-Object { $_.Name -notLike $userIdentifier } | Select-Object -ExpandProperty Name
-    $csvUsers = $csvUsers | Select-Object -Property $propertiesToUpdate
+    $backup = @()
 
+    # TESTING START
+    $csvUsers  | ForEach-Object {
+        try {
+            $mgUser = Get-MgUser -UserId $_.$UserIdentifier -Property $propertiesToUpdate
+            $backup += ($mgUser | Select-Object $propertiesToUpdate)
+        } catch {
+            Write-Output "[WARNING] $($_.$UserIdentifier): SKIPPED, unable to find an Entra ID user using provided the identifier"    
+            $skippedUser = $_.$UserIdentifier
+            $skippedUsers.Add($skippedUser)
+            continue
+        }
+    }
+    $backup | Export-Csv $backupFile -NoTypeInformation
+    # TESTING STOP
+}
+    
     # Iterate through users and update properties as needed
     foreach ($user in $csvUsers) {
         try {
@@ -228,6 +244,7 @@ function Start-PropertyUpdateWorkflow {
     }
 
 }
+
 function Export-Results {
     if ( $results ) {
         $results | Export-Csv $resultsOutput -NoTypeInformation
@@ -249,6 +266,7 @@ function Export-Results {
 $resultsOutput = "$ExportPath\AzureAD_user_property_changes_$((Get-Date -Format "MM-dd-yyyy_HHmm")).csv"
 $skippedUsersOutput = "$ExportPath\AzureAD_user_property_changes_skippedUsers_$((Get-Date -Format "MM-dd-yyyy_HHmm")).txt"
 $errorLogOutput = "$ExportPath\AzureAD_user_property_changes_errors_$((Get-Date -Format "MM-dd-yyyy_HHmm")).txt"
+$backupFile = "$ExportPath\AzureAD_user_property_backup_$((Get-Date -Format "MM-dd-yyyy_HHmm")).csv"
 
 # Empty lists to store results
 $results = New-Object System.Collections.Generic.List[System.Object]

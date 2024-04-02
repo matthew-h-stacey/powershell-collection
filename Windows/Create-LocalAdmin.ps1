@@ -1,3 +1,57 @@
+﻿<#
+.SYNOPSIS
+	Creates a local admin on a workstation
+
+.DESCRIPTION
+	This script will check for the presence of a user, add them to Administrators if they are not an admin, or create a new account and them to Administrators
+
+.EXAMPLE
+	Create-LocalAdmin -Username cloud_laps -Description "Local account used for Windows LAPS"
+
+.NOTES
+	Author: Matt Stacey (BCS)
+	Date:   April 1, 2024
+#>
+
+param (
+    # Parameter help description
+    [Parameter(Mandatory=$true)]
+    [String]
+    $Username,
+
+    # Parameter help description
+    [Parameter(Mandatory=$true)]
+    [String]
+    $Description
+)
+
+function New-Folder {
+    
+    <#
+    .SYNOPSIS
+    Determine if a folder already exists, or create it  if not.
+
+    .EXAMPLE
+    New-Folder C:\TempPath
+    #>
+
+    param(
+        [Parameter(Mandatory = $True)]
+        [String]
+        $Path
+    )
+    if (-not (Test-Path -LiteralPath $Path)) {
+        try {
+            New-Item -Path $Path -ItemType Directory -ErrorAction Stop | Out-Null
+        } catch {
+            Write-Error -Message "Unable to create directory '$Path'. Error was: $_" -ErrorAction Stop
+        }
+    } else {
+        # Path already exists, continue
+    }
+
+}
+
 function Write-Log {
     
     <#
@@ -127,13 +181,12 @@ function Set-LocalAdmin {
 
 }
 
-# Local account used for Windows LAPS
-$Username = "cloud_laps"
 
 # Logging
-$outputDirectory = "C:\Windows\System32\LogFiles\EndpointManager"
-$logFile = "$OutputDirectory\LocalAdminUser.log"
-Write-Log "[INFO] Starting Set-LocalAdmin. Username: $Username"  -LogFile $logFile
+$outputDirectory = "C:\Windows\System32\LogFiles\GroupPolicy"
+New-Folder -Path $outputDirectory
+$logFile = "$OutputDirectory\Windows_LAPS_user.log"
+Write-Log "[INFO] Starting Create-LocalAdmin. Username: $Username"  -LogFile $logFile
 
 # Execution
-Set-LocalAdmin -Username $Username -Description "Windows LAPS-managed user account"
+Set-LocalAdmin -Username $Username -Description $Description
