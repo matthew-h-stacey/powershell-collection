@@ -206,7 +206,6 @@ function Start-PropertyUpdateWorkflow {
 
     $csvUsers = Import-Csv -Path $CSV 
     $propertiesToUpdate = $csvUsers | Get-Member -MemberType NoteProperty | Where-Object { $_.Name -notLike $userIdentifier } | Select-Object -ExpandProperty Name
-    $csvUsers = $csvUsers | Select-Object -Property $propertiesToUpdate
 
     # Iterate through users and update properties as needed
     foreach ($user in $csvUsers) {

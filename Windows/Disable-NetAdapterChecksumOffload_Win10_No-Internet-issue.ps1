@@ -1,1 +1,4 @@
-Disable-NetAdapterChecksumOffload –Name * -TcpIPv4 -UdpIPv4 -TcpIPv6 -UdpIPv6
+# Parameter help description
+[Parameter(AttributeValues)]
+[ParameterType]
+$ParameterName
