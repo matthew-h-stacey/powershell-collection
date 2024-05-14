@@ -86,11 +86,8 @@ function Update-Property {
 
         # The new value for the property
         [Parameter(Mandatory=$true, Position=2)]
-        [string]$newValue,
+        [string]$newValue
 
-        # Optional parameter to record changes but not actually make them
-        [Parameter(Mandatory=$false)]
-        [switch]$WhatIf
     )
 
     <#
