@@ -311,10 +311,18 @@ function Find-ADUser {
         }
     }
     if ( !$user ) {
-        Write-LogAndOutput -Message "[ERROR] Unable to locate a user with provided input: $Identity. Please verify that you entered the correct samAccountName/DisplayName/UserPrincipalName of an existing user and try again."
+        if ( $LogFile) {
+            Write-LogAndOutput -Message "[ERROR] Unable to locate a user with provided input: $Identity. Please verify that you entered the correct samAccountName/DisplayName/UserPrincipalName of an existing user and try again."
+        } else {
+            Write-Output "[ERROR] Unable to locate a user with provided input: $Identity. Please verify that you entered the correct samAccountName/DisplayName/UserPrincipalName of an existing user and try again."
+        }
         exit 1
     } elseif ( $user.Count -gt 1 ) {
-        Write-LogAndOutput -Message "[ERROR] More than one user located with the provided input: $Identity. Please try a more descriptive identifier and try again (ex: UserPrincipalName versus DisplayName)"
+        if ( $LogFile ) {
+            Write-LogAndOutput -Message "[ERROR] More than one user located with the provided input: $Identity. Please try a more descriptive identifier and try again (ex: UserPrincipalName versus DisplayName)"
+        } else {
+            Write-Output "[ERROR] More than one user located with the provided input: $Identity. Please try a more descriptive identifier and try again (ex: UserPrincipalName versus DisplayName)"
+        }
         exit 1
     }
     $user
