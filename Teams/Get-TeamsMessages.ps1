@@ -57,7 +57,12 @@ do {
     else {
         $uri
     }
-    $response = Invoke-MgGraphRequest -Uri $uri -Method $method
+    try {
+        $response = Invoke-MgGraphRequest -Uri $uri -Method $method
+    } catch {
+        Write-Output "[ERROR] Failed to retrieve output from MS Graph. Error: $($_.Exception.Message)"
+        exit
+    }
     $output = $response.Value
     $msGraphOutput += $output
     $nextLink = $response.'@odata.nextLink'
@@ -70,7 +75,7 @@ $chats = $msGraphOutput | Select-Object -Property (
     @{Name = "To"; Expression = {
             $participants = Get-ChatParticipants -ChatId $_.chatId
             $msgSender = $_.from.user.displayName
-        ($participants | Where-Object { $_ -ne $msgSender }) -join ", "
+            ($participants | Where-Object { $_ -ne $msgSender }) -join ", "
         }
     },
     @{Name = "Content"; Expression = { $_.body.content } },
