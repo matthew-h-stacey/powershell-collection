@@ -1,9 +1,0 @@
-# Check if already connected to AzureAD, connect if not connected
-
-try { 
-    Get-AzureADTenantDetail -ErrorAction Stop | Out-Null
-} 
-catch {
-    Write-Host "[MODULE] Connecting to AzureAD, check for a pop-up authentication window"
-    Connect-AzureAD | Out-Null
-}

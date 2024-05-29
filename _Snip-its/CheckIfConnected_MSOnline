@@ -1,7 +1,0 @@
-try {
-    Get-MsolDomain -ErrorAction Stop > $null
-}
-catch {
-    Write-Host "Connecting to MsolService, check for a pop-up authentication window"
-    Connect-MsolService
-}
