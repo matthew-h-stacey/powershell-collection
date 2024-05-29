@@ -60,7 +60,8 @@ do {
     try {
         $response = Invoke-MgGraphRequest -Uri $uri -Method $method
     } catch {
-        Write-Output "[ERROR] Failed to retrieve output from MS Graph. Error: $($_.Exception.Message)"
+        Write-Output "[ERROR] Failed to retrieve output from MS Graph. Error:"
+        $_.ErrorDetails.Message
         exit
     }
     $output = $response.Value
