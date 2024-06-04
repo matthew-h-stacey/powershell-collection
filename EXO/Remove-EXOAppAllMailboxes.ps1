@@ -18,14 +18,14 @@ $mailboxes | ForEach-Object {
     $upn = $_.UserPrincipalName
     $appToRemove = Get-App -Mailbox $upn | Where-Object { $_.DisplayName -like $appname}
     if ( $appToRemove ) { 
-        Write-Output "[$upn] Located unwanted app. App name: $($appToRemove.DisplayName). App ID: $($appToRemove.AppId)"
-        Write-Output "[$upn] Attempting to remove app ..."
+        Write-Output "[INFO][$upn] Located unwanted app. App name: $($appToRemove.DisplayName). App ID: $($appToRemove.AppId)"
+        Write-Output "[INFO][$upn] Attempting to remove app ..."
         try {
             Remove-App -Identity $appToRemove.AppId -Mailbox $upn -Confirm:$false
-            Write-Output "[$upn] Successfully removed app"
+            Write-Output "[INFO][$upn] Successfully removed app"
         }
         catch {
-            Write-Output "[$upn] Failed to remove app: $($appToRemove.DisplayName). Error: $($_.Exception.Message)"
+            Write-Output "[ERROR][$upn] Failed to remove app: $($appToRemove.DisplayName). Error: $($_.Exception.Message)"
         }
     }
 }

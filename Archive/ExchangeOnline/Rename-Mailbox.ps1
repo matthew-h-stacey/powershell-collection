@@ -1,5 +1,5 @@
-$oldUPN = "socialmedia@southshoretherapies.com"
-$newUPN = "resources@southshoretherapies.com"
+$oldUPN = "socialmedia@contoso.com"
+$newUPN = "resources@contoso.com"
 $newDisplayName = "Resources"
 
 Connect-MsolService

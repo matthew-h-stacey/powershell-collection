@@ -2,10 +2,10 @@
 # Usage: .\Connect-DelegatedExchangeOnline.ps1 -Domain contoso.com
 # At the sign-in prompt, use your own credentials instead of signing in a specific Office 365 admin account
 
-Param
-(   
-    [Parameter(Mandatory = $true)] [string] $Domain
+param(   
+    [Parameter(Mandatory = $true)]
+    [string]
+    $Domain
 )
-
 
 Connect-ExchangeOnline -DelegatedOrganization $Domain -ShowBanner:$false

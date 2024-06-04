@@ -1,11 +1,11 @@
-function Test-Mailbox {
+function Test-EXOMailbox {
 
     <#
     .SYNOPSIS
     This function is used to either return a mailbox (if located) or null without errors
 
     .EXAMPLE
-    if ( Test-Mailbox -UserPrincipalName jsmith@contoso.com ) {
+    if ( Test-EXOMailbox -UserPrincipalName jsmith@contoso.com ) {
         # do the thing
     }
     #>

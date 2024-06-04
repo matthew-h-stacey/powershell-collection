@@ -1,12 +1,15 @@
-Param(
-    [Parameter(Mandatory = $True)][string]$Mailbox,
-    [Parameter(Mandatory = $False)][switch]$Archive
+param(
+    [Parameter(Mandatory = $True)]
+    [string]
+    $Mailbox,
+
+    [Parameter(Mandatory = $False)]
+    [switch]
+    $Archive
 )
 
-if ($Archive.IsPresent){
+if ($Archive){
     Get-MailboxFolderstatistics -Identity $Mailbox -Archive | Where-Object { $_.FolderPath -like "*inbox*" } | Sort-Object FolderPath | Select-Object FolderPath
-}
-else {
+} else {
     Get-MailboxFolderstatistics -Identity $Mailbox | Where-Object { $_.FolderPath -like "*inbox*" } | Sort-Object FolderPath | Select-Object FolderPath
 }
-

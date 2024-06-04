@@ -1,33 +1,26 @@
 function Get-EXOForwardingMailboxes {
 
-param(
-)
-
     # Retrieve all mailboxes with forwarding enabled
-    $ForwardingMBs = Get-Mailbox | Where-Object { ($null -ne $_.ForwardingSMTPAddress) -or ($null -ne $_.ForwardingAddress ) }
+    $forwardingMBs = Get-Mailbox | Where-Object { ($null -ne $_.ForwardingSMTPAddress) -or ($null -ne $_.ForwardingAddress ) }
 
     # For-each loop to gather and format properties for all the mailboxes with forwarding
     $results = @()
-    foreach ( $User in $ForwardingMBs ) {
-        
-        if ( $User.ForwardingAddress ) {
-            $ForwardingAddressUser = (Get-Recipient $User.ForwardingAddress).PrimarySmtpAddress
+    foreach ( $mailbox in $forwardingMBs ) {
+        if ( $mailbox.ForwardingAddress ) {
+            $forwardingAddressUser = (Get-Recipient $mailbox.ForwardingAddress).PrimarySmtpAddress
         } 
         else {
-            $ForwardingAddressUser = $null
+            $forwardingAddressUser = $null
         }
-
-        $Output = [PSCustomObject]@{
-            DisplayName = $User.DisplayName
-            UserPrincipalName = $User.UserPrincipalName
-            ForwardingSMTPAddress = $User.ForwardingSMTPAddress
-            ForwardingAddress            = $ForwardingAddressUser
+        $output = [PSCustomObject]@{
+            DisplayName             = $mailbox.DisplayName
+            UserPrincipalName       = $mailbox.UserPrincipalName
+            ForwardingSMTPAddress   = $mailbox.ForwardingSMTPAddress
+            ForwardingAddress       = $forwardingAddressUser
         }
-        $results += $Output
-
+        $results += $output
     }
-    # Export results to the report file
-    $results | Sort-Object DisplayName | Out-SkyKickTableToHtmlReport -IncludePartnerLogo -ReportTitle "Forwarding Mailbox Report" -ReportFooter "Report created using SkyKick Cloud Manager" -OutTo NewTab
-
+    $results = $results | Sort-Object DisplayName
+    return $results
 	
 }

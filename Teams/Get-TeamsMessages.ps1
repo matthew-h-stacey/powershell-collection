@@ -1,6 +1,6 @@
-# NOTE: API permissions require Application permissions (app reg) - does NOT work with delegated (account) permissions
-# Create an app reg with Chat.ReadWrite.All permissions
-# Connect-mggraph -CertificateThumbprint XXXXXXXXXX -ClientId XXXXXXXXXX -TenantId XXXXXXXXXX
+# NOTE: API requires Application vs Delegated permissions
+# Create and authenticate to Graph with an app reg that has Chat.ReadWrite.All permissions
+# Connect-MgGraph -CertificateThumbprint XXXXXXXXXX -ClientId XXXXXXXXXX -TenantId XXXXXXXXXX
 
 [CmdletBinding(DefaultParameterSetName="All")]
 param (
@@ -25,6 +25,47 @@ param (
     $EndDate
 )
 
+function Get-GraphOutput {
+
+    <#
+    .SYNOPSIS
+    This is a simple function to perform a GET request to a Graph endpoint with support for 999+ objects
+
+    .EXAMPLE
+    Get-GraphOutput -URI  https://graph.microsoft.com/v1.0/users/$UserPrincipalName/chats/getAllMessages
+    #>
+
+    param(
+        # URI to retrieve output from
+        [Parameter(Mandatory = $true)]
+        [String]
+        $URI
+    )
+
+    $method = "GET"
+    $msGraphOutput = @()
+    $nextLink = $null
+    do {
+        $uri = if ($nextLink) {
+            $nextLink
+        } else {
+            $uri
+        }
+        try {
+            $response = Invoke-MgGraphRequest -Uri $uri -Method $method
+        } catch {
+            Write-Output "[ERROR] Failed to retrieve output from MS Graph. Error:"
+            $_.ErrorDetails.Message
+            exit
+        }
+        $output = $response.Value
+        $msGraphOutput += $output
+        $nextLink = $response.'@odata.nextLink'
+    } until (-not $nextLink)
+
+    return $msGraphOutput
+}
+
 function Get-ChatParticipants {
     param (
         [String] $ChatId
@@ -47,30 +88,11 @@ if ($PSCmdlet.ParameterSetName -eq "Range") {
     $uri = "https://graph.microsoft.com/v1.0/users/$UserPrincipalName/chats/getAllMessages"
 }
 
-$method = "GET"
-$msGraphOutput = @()
-$nextLink = $null
-do {
-    $uri = if ($nextLink) {
-        $nextLink
-    }
-    else {
-        $uri
-    }
-    try {
-        $response = Invoke-MgGraphRequest -Uri $uri -Method $method
-    } catch {
-        Write-Output "[ERROR] Failed to retrieve output from MS Graph. Error:"
-        $_.ErrorDetails.Message
-        exit
-    }
-    $output = $response.Value
-    $msGraphOutput += $output
-    $nextLink = $response.'@odata.nextLink'
-} until (-not $nextLink)
+# Retrieve Graph output
+$output = Get-GraphOutput -URI $uri
 
 # Format and output the chat messages
-$chats = $msGraphOutput | Select-Object -Property (
+$chats = $output | Select-Object -Property (
     @{Name = "Sent"; Expression = { Get-Date $_.createdDateTime -Format "MM/dd/yyyy HH:mm:ss" } },
     @{Name = "From"; Expression = { $_.from.user.displayName } },
     @{Name = "To"; Expression = {

@@ -22,3 +22,26 @@ if ($PSCmdlet.ParameterSetName -eq "SetA") {
     Write-Host "SetA was used."
     # Put code specific to SetA here
 }
+
+#####################
+# Example: switch statement
+#####################
+
+switch ($PSCmdlet.ParameterSetName) {
+    'ParameterSetA' {
+        # Code for parameter set A
+        Write-Output "Parameter set A used"
+    }
+    'ParameterSetB' {
+        # Code for parameter set B
+        Write-Output "Parameter set B used"
+    }
+    'ParameterSetC' {
+        # Code for parameter set C
+        Write-Output "Parameter set C used"
+    }
+    Default {
+        # Default code if none of the parameter sets match
+        Write-Output "Unknown parameter set used"
+    }
+}
