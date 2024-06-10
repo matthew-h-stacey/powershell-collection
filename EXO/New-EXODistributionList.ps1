@@ -30,7 +30,7 @@ param (
     # Path to a txt file containing the email addresses of users to add
     [Parameter(Mandatory = $false)]
     [string]
-    $Path,  
+    $File,  
 
     # Optional autoreply message text
     [Parameter(Mandatory = $false)]
@@ -56,8 +56,8 @@ try {
 }
 
 # Add all members
-if ( $Path ) {
-    $users = Get-Content -Path $Path
+if ( $File ) {
+    $users = Get-Content -Path $File
     foreach($u in $users){
         try { 
             $isValid = Get-Mailbox $u -ErrorAction Stop

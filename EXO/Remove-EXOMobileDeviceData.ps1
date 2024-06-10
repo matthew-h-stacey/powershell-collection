@@ -1,32 +1,29 @@
 <#
 .SYNOPSIS
-This script does something useful.
+Initiate a data removal command to delete Exchange Online data from a user's mobile devices (not a remote wipe)
 
-.DESCRIPTION
-This script performs some important tasks.
+.PARAMETER UserPrincipalName
+Clear data and device partnerships from this user's mobile devices
 
-.PARAMETER Parameter1
-Specifies the first parameter. Explain what it does.
+.PARAMETER NativeAppOnly
+Optional, use this parameter to ONLY clear native (non-Outlook) mobile app data/partnerships
 
-.PARAMETER Parameter2
-Specifies the second parameter. Explain its purpose.
+.PARAMETER WhatIf
+Optional: display output but do not perform any actions
 
 .EXAMPLE
 Remove-EXOMobileDeviceData.ps1 -UserPrincipalName jsmith@contoso.com
 #>
 
 param (   
-    # UPN of the user to clear mobile data and partnerships from    
     [Parameter(Mandatory = $true)]
     [string[]]
     $UserPrincipalName,
     
-    # Optional, use this parameter to ONLY clear native (non-Outlook) mobile app data/partnerships
     [Parameter(Mandatory = $false)]
     [switch]
     $NativeAppOnly,
 
-    # Display output but do not perform any actions
     [Parameter(Mandatory=$false)]
     [switch]
     $WhatIf

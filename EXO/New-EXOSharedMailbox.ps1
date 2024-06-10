@@ -55,7 +55,7 @@ if ($Room) {
 
 # Attempt to create the mailbox
 try {
-    New-Mailbox @params | Out-Null
+    New-Mailbox @params
     Write-Output "[INFO] Successfully created $PrimarySmtpAddress"
 } catch {
     Write-Output "[ERROR] Failed to create $PrimarySmtpAddress. Error: $($_.Exception.Message)"  -ErrorAction Stop
