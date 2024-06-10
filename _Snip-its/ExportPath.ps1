@@ -1,11 +1,19 @@
 <#
-1) Parameter:
+1) Note block:
 
-# Path to export results to
+.PARAMETER ExportPath
+The local directory to export the script output to
+
+###########################
+
+2) Parameter:
 [Parameter(Mandatory=$true)]
 [String]
 $ExportPath
 
-2) Remove trailing "\"
-$ExportPath = $($ExportPath.TrimEnd("\")) # trim trailing "\""
+###########################
+
+3) Script body 
+$ExportPath = $($ExportPath.TrimEnd("\")) # trim trailing "\"
+
 #>
