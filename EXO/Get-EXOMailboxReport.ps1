@@ -23,7 +23,6 @@
 function Get-EXOMailboxReport {
     param(
         [Bool]$LargeMailboxesOnly = $False,
-
         [SkyKickConditionalVisibility({
                 param($LargeMailboxesOnly)
                 return (
@@ -41,9 +40,7 @@ function Get-EXOMailboxReport {
             ErrorMessage = "Please enter the threshold in the following format: XGB/XXGB/XXXGB."
         )]
         [String]$Threshold = "40GB",
-
         [Bool]$SharedMailboxesOnly = $False
-	
     )
 
     $ClientName = (Get-CustomerContext).CustomerName
@@ -53,8 +50,21 @@ function Get-EXOMailboxReport {
     $Mailboxes = Get-Mailbox -ResultSize Unlimited
     $results = @()
 
-    foreach ( $Mailbox in $Mailboxes ) {
     
+
+    foreach ( $Mailbox in $Mailboxes ) {
+
+        $MailboxSize = ($Mailbox | Get-EXOMailboxStatistics | Select-Object -ExpandProperty TotalItemSize)
+        $HasArchive = $Mailbox.ArchiveStatus -eq "Active"
+        switch ( $HasArchive ) {
+            True {
+                $ArchiveSize = $Mailbox | Get-EXOMailboxStatistics -Archive | Select-Object -ExpandProperty TotalItemSize | Select-Object -ExpandProperty Value
+            }
+            False {
+                $ArchiveSize = "N/A"
+            }
+        }
+
         $MailboxOutput = [PSCustomObject]@{
             DisplayName                   = $Mailbox.DisplayName
             PrimarySmtpAddress            = $Mailbox.PrimarySmtpAddress
@@ -64,24 +74,23 @@ function Get-EXOMailboxReport {
             HiddenFromAddressListsEnabled = $Mailbox.HiddenFromAddressListsEnabled
             ForwardingAddress             = $Mailbox.ForwardingAddress
             ForwardingSmtpAddress         = $Mailbox.ForwardingSmtpAddress
+            RetentionPolicy               = $Mailbox.RetentionPolicy
+            RetentionHoldEnabled          = $Mailbox.RetentionHoldEnabled
+            MailboxSize                   = $MailboxSize
             ArchiveStatus                 = $Mailbox.ArchiveStatus
             AutoExpandingArchiveEnabled   = $Mailbox.AutoExpandingArchiveEnabled
-            RetentionHoldEnabled          = $Mailbox.RetentionHoldEnabled
-            TotalItemSize                 = ($Mailbox | Get-EXOMailboxStatistics | Select-Object -ExpandProperty TotalItemSize)
+            ArchiveSize                   = $ArchiveSize
         }
-
         if ($SharedMailboxesOnly) {
             if ($LargeMailboxesOnly) {
                 $LargeSharedMailboxes = $MailboxOutput | Where-Object { $_.RecipientTypeDetails -eq "SharedMailbox" -and [int64]($_.TotalItemSize.Value -replace '.+\(|bytes\)') -gt $Threshold }
                 $results += $LargeSharedMailboxes
-            }
-            else {
+            } else {
                 $SharedMailboxes = $MailboxOutput | Where-Object { $_.RecipientTypeDetails -eq "SharedMailbox" }
                 $results += $SharedMailboxes
             }
-        }
-        elseif ($LargeMailboxesOnly) {
-            $results += $MailboxOutput | Where-Object { [int64]($_.TotalItemSize.Value -replace '.+\(|bytes\)') -gt $Threshold }
+        } elseif ($LargeMailboxesOnly) {
+            $results += $MailboxOutput | Where-Object { [int64]($_.MailboxSize.Value -replace '.+\(|bytes\)') -gt $Threshold }
         }
 
         else {
@@ -92,5 +101,6 @@ function Get-EXOMailboxReport {
     }
 
     $results | Out-SkyKickTableToHtmlReport -IncludePartnerLogo -ReportTitle $HTMLReportName -ReportFooter $HTMLReportFooter -OutTo NewTab
+
 
 }
