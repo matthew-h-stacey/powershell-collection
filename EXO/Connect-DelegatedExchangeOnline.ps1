@@ -1,6 +1,13 @@
-# Objective: Connect to a client tenant using delegated access
-# Usage: .\Connect-DelegatedExchangeOnline.ps1 -Domain contoso.com
-# At the sign-in prompt, use your own credentials instead of signing in a specific Office 365 admin account
+<#
+.SYNOPSIS
+Connect to a client tenant using delegated access
+
+.PARAMETER Domain
+The primary domain of the tenant to connect to
+
+.EXAMPLE
+Connect-DelegatedExchangeOnline.ps1 -Domain contoso.com
+#>
 
 param(   
     [Parameter(Mandatory = $true)]
