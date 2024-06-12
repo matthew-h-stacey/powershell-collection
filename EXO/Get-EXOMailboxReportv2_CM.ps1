@@ -1,12 +1,38 @@
 function Get-EXOMailboxReportv2 {
+
+    <#
+    .DESCRIPTION
+    This command contains a group of reports that can be selected using the interactive menu
+
+    <h4>Mailbox Statistics Report</h4>
+
+    Mailbox report reports can be generated on all mailboxes, or a few filtered types of mailboxes: mailboxes with forwarding enabled, large mailboxes only (customizable threshold), or shared mailboxes only.
+
+    <h4>Mailbox Permissions Report</h4>
+    
+    A report of mailbox permissions be generated for all mailboxes or a particular mailbox. In addition, toggles to include contacts and calendar are available.    
+    #>
+
+    [SkyKickCommand(DisplayName = "Set Parameter Sections", Sections = { "Exchange mailbox report v2" })]
     param(
+        [SkyKickParameter(
+            DisplayName = "Client",
+            Section = "Exchange mailbox report v2",
+            DisplayOrder = 1
+        )]
+        [Parameter(Mandatory = $true)]
+        [CustomerContext]
+        $Client,
+
         ### Report type
         [SkyKickParameter(
             DisplayName = "Report Type",
-            HintText = "Please select the type of Exchange Online mailbox report from the available options."
+            HintText = "Please select the type of Exchange Online mailbox report from the available options.",
+            Section = "Exchange mailbox report v2",
+            DisplayOrder = 2
         )]
         [Parameter(Mandatory = $true)]
-        [ValidateSet("All", "Forwarding mailboxes only", "Large mailboxes only", "Permissions report", "Shared mailboxes only")]
+        [ValidateSet("Mailbox report - All mailboxes", "Mailbox report - Forwarding mailboxes only", "Mailbox report - Large mailboxes only", "Mailbox report - Shared mailboxes only", "Mailbox permissions")]
         [string]
         $Choice,
 
@@ -14,14 +40,16 @@ function Get-EXOMailboxReportv2 {
         [SkyKickConditionalVisibility({
                 param($Choice)
                 return (
-                ($Choice -eq "Large mailboxes only")
+                ($Choice -eq "Mailbox report - Large mailboxes only")
                 )
             },
             IsMandatoryWhenVisible = $true
         )]
         [SkyKickParameter(
             DisplayName = "Threshold",
-            HintText = "Enter the threshold of what is considered to be a large mailbox (ex: 40GB)."
+            HintText = "Enter the threshold of what is considered to be a large mailbox (ex: 40GB).",
+            Section = "Exchange mailbox report v2",
+            DisplayOrder = 3
         )]
         [ValidatePattern(
             '^\d+GB$',
@@ -34,7 +62,7 @@ function Get-EXOMailboxReportv2 {
         [SkyKickConditionalVisibility({
                 param($Choice)
                 return (
-                ($Choice -eq "Permissions report")
+                ($Choice -eq "Mailbox permissions")
                 )
             },
             IsMandatoryWhenVisible = $true
@@ -43,13 +71,13 @@ function Get-EXOMailboxReportv2 {
             DisplayName = "All mailboxes?"
         )]
         [boolean]
-        $AllMailboxPermissions=$true,
+        $AllMailboxPermissions = $true,
 
         ### Conditional: PrimarySmtpAddress
         [SkyKickConditionalVisibility({
                 param($Choice, $AllMailboxPermissions)
                 return (
-                ($Choice -eq "Permissions report") -and
+                ($Choice -eq "Mailbox permissions") -and
                 ($AllMailboxPermissions -eq $false)
                 )
             },
@@ -66,7 +94,7 @@ function Get-EXOMailboxReportv2 {
         [SkyKickConditionalVisibility({
                 param($Choice)
                 return (
-                ($Choice -eq "Permissions report")
+                ($Choice -eq "Mailbox permissions")
                 )
             },
             IsMandatoryWhenVisible = $true
@@ -75,13 +103,13 @@ function Get-EXOMailboxReportv2 {
             DisplayName = "Include calendars in permission report?"
         )]
         [boolean]
-        $Calendar=$true,
+        $Calendar = $true,
 
         ### Conditional: Contacts
         [SkyKickConditionalVisibility({
                 param($Choice)
                 return (
-                ($Choice -eq "Permissions report")
+                ($Choice -eq "Mailbox permissions")
                 )
             },
             IsMandatoryWhenVisible = $true
@@ -90,28 +118,32 @@ function Get-EXOMailboxReportv2 {
             DisplayName = "Include contacts in permission report?"
         )]
         [boolean]
-        $Contacts=$true
+        $Contacts = $true
     )
 
+    Set-CustomerContext $Client
     $clientName = (Get-CustomerContext).CustomerName
-    $htmlReportName = "$($clientName) Exchange Mailbox Report"
     $htmlReportFooter = "Report created using SkyKick Cloud Manager"
 
     switch ( $Choice ) { 
-        "All" {
+        "Mailbox report - All mailboxes" {
+            $htmlReportName = "$($clientName) Mailbox Report"
             $results = Get-EXOMailboxInformation -Scope All
         }
-        "Forwarding mailboxes only" {
+        "Mailbox report - Forwarding mailboxes only" {
+            $htmlReportName = "$($clientName) Forwarding Mailbox Report"
             $results = Get-EXOMailboxInformation -Scope ForwardingMailboxes
         }
-        "Large mailboxes only" {
-            #$results = Get-EXOMailboxInformation -Scope All | Where-Object { [int64]($_.MailboxSize.Value -replace '.+\(|bytes\)') -gt $Threshold }
+        "Mailbox report - Large mailboxes only" {
+            $htmlReportName = "$($clientName) Large Mailbox Report"
             $results = Get-EXOMailboxInformation -LargeMailboxesOnly -Threshold $Threshold
         }
-        "Permissions report" {
+        "Mailbox permissions" {
+            $htmlReportName = "$($clientName) Mailbox Permissions Report"
             $results = Get-EXOMailboxPermissionReport -PrimarySmtpAddress $PrimarySmtpAddress -CloudManager -Calendar $Calendar -Contacts $Contacts
         }
-        "Shared mailboxes only" {
+        "Mailbox report - Shared mailboxes only" {
+            $htmlReportName = "$($clientName) Shared Mailbox Report"
             $results = Get-EXOMailboxInformation -Scope SharedMailboxes
         }
     }
