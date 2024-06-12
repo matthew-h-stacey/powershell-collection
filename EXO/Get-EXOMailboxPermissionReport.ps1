@@ -25,13 +25,13 @@ function Get-EXOMailboxPermissionReport {
 
     param(
         
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory = $false)]
         [string]
         $PrimarySmtpAddress,
 
         [Parameter(Mandatory = $false)]
         [boolean]
-        $Calendars,
+        $Calendar,
 
         [Parameter(Mandatory = $false)]
         [boolean]
@@ -41,7 +41,7 @@ function Get-EXOMailboxPermissionReport {
         [switch]
         $CloudManager,
 
-        [Parameter(Mandatory=$true, ParameterSetName = "Local")]
+        [Parameter(Mandatory = $true, ParameterSetName = "Local")]
         [string]
         $ExportPath
 
