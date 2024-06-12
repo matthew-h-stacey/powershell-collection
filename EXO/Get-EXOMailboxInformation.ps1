@@ -21,10 +21,11 @@ function Get-EXOMailboxInformation {
         [ValidateSet("All", "ForwardingMailboxes", "SharedMailboxes")]
         $Scope,
 
-        [Parameter(Mandatory=$true, ParameterSetName = "Size-based")]
+        [Parameter(Mandatory = $true, ParameterSetName = "Size-based")]
         [switch]
         $LargeMailboxesOnly,
 
+        [Parameter(Mandatory = $true, ParameterSetName = "Size-based")]
         [ValidatePattern(
             '^\d+GB$',
             ErrorMessage = "Please enter the threshold in the following format: XGB/XXGB/XXXGB."
