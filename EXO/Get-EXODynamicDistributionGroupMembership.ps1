@@ -13,7 +13,7 @@ $membership = @()
 $allDynamicDistis = Get-DynamicDistributionGroup -ResultSize Unlimited
 foreach ( $dyndisti in $allDynamicDistis ) {
     if ( $dyndisti.ManagedBy) {
-        $ownerId = $disti.ManagedBy
+        $ownerId = $dyndisti.ManagedBy
         $groupOwner = (Get-Recipient -Identity "$ownerId").DisplayName
     } else {
         $groupOwner = "N/A"
