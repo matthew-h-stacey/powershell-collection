@@ -27,6 +27,9 @@ The local directory to export the script output to
 .EXAMPLE
 Example: Update-EXOMailboxPermissions.ps1 -Mailbox jsmith@contoso.com -Trustee aroberts@contoso.com -AccessRights FullAccess -AutoMapping $False
 Example (bulk): $users = get-content C:\TempPath\users.txt; foreach($u in $users){.\Update-EXOMailboxPermissions.ps1 -Mailbox $u -Trustee aroberts@contoso.com -AccessRights fullaccess -AutoMapping:$False}
+
+.NOTES
+This script currently assumes FullAccess is being granted and thus it grants Calendar and Contacts access. This should be updated to be more conditional based on AccessRights
 #>
 
 [CmdletBinding()]
@@ -77,79 +80,10 @@ function New-Folder {
 
 }
 
-function Test-EXOMailbox {
-
-    <#
-    .SYNOPSIS
-    This function is used to either return a mailbox (if located) or null without errors
-
-    .EXAMPLE
-    if ( Test-EXOMailbox -UserPrincipalName jsmith@contoso.com ) {
-        # do the thing
-    }
-    #>
-    
-    param (
-        # Locate mailbox using a DisplayName
-        [Parameter(Mandatory = $true, ParameterSetName = "DisplayName")]
-        [string]
-        $DisplayName,
-
-        # Locate mailbox using a PrimarySmtpAddress
-        [Parameter(Mandatory = $true, ParameterSetName = "PrimarySmtpAddress")]
-        [string]
-        $PrimarySmtpAddress,
-
-        # Locate mailbox using a UserPrincipalName
-        [Parameter(Mandatory = $true, ParameterSetName = "UserPrincipalName")]
-        [string]
-        $UserPrincipalName,
-
-        # Return mailbox object only if it is a shared mailbox
-        [Parameter(Mandatory = $false, ParameterSetName = "Shared")]
-        [Parameter(ParameterSetName = "DisplayName")]
-        [Parameter(ParameterSetName = "PrimarySmtpAddress")]
-        [Parameter(ParameterSetName = "UserPrincipalName")]
-        [switch]
-        $Shared,
-
-        # Return mailbox object only if it is a user mailbox
-        [Parameter(Mandatory = $false, ParameterSetName = "User")]
-        [Parameter(ParameterSetName = "DisplayName")]
-        [Parameter(ParameterSetName = "PrimarySmtpAddress")]
-        [Parameter(ParameterSetName = "UserPrincipalName")]
-        [switch]
-        $User
-    )
-
-    # Adjust the filter based on the provided identity
-    switch ( $PSCmdlet.ParameterSetName ) {
-        "DisplayName" { $filter = "DisplayName -like '" + $DisplayName + "'" }
-        "PrimarySmtpAddress" { $filter = "PrimarySmtpAddress -like '" + $PrimarySmtpAddress + "'"}
-        "UserPrincipalName" { $filter = "UserPrincipalName -like '" + $UserPrincipalName + "'" }
-    }
-
-    $mailbox = Get-Mailbox -Filter $filter
-
-    # Selectively return the mailbox based on the usage or absense one of the switches
-    if ( $Shared ) {
-        if ( $mailbox.RecipientTypeDetails -eq "SharedMailbox") {
-            return $mailbox
-        }
-    } elseif ( $User ) {
-        if ( $mailbox.RecipientTypeDetails -eq "UserMailbox") {
-            return $mailbox
-        }
-    } else {
-        return $mailbox
-    }
-
-}
-
 $ExportPath = $($ExportPath.TrimEnd("\")) # trim trailing "\"
 New-Folder $ExportPath
 $permissionsBackup = "$ExportPath\${Mailbox}_permissions_backup_$(Get-Date -Format "MM-dd-yyyy_HHmm").csv"
-
+ 
 $userMailbox = Test-EXOMailbox -PrimarySmtpAddress $Mailbox -User
 if ( $userMailbox ) {
     $trusteeMailbox = Test-EXOMailbox -PrimarySmtpAddress $Trustee -User
