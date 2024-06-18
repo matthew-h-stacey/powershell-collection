@@ -1,18 +1,38 @@
 <#
 .SYNOPSIS
-Retrieve membership of all distribution groups
+Retrieve membership of distribution groups
 
 .EXAMPLE
 $members = Get-EXODistributionGroupMembership
-
-.NOTES
-[ ] Add filter for specific group
 #>
 
-$membership = @()
-$allDistis = Get-DistributionGroup -ResultSize Unlimited | Sort-Object DisplayName
+param (
+    [Parameter(Mandatory = $true, ParameterSetName = "All")]
+    [switch]
+    $All,
 
-foreach ($disti in $allDistis) {
+    [Parameter(Mandatory = $true, ParameterSetName = "Single")]
+    [switch]
+    $PrimarySmtpAddress
+)
+
+$membership = @()
+
+switch ($PSCmdlet.ParameterSetName) {
+    'All' {
+        $distis = Get-DistributionGroup -ResultSize Unlimited | Sort-Object DisplayName
+    }
+    'Single' {
+        try {
+            $distis = Get-DistributionGroup -Identity $PrimarySmtpAddress -ErrorAction Stop
+        } catch {
+            Write-Output "[ERROR] Unable to locate distribution group: $PrimarySmtpAddress. Please check the provided value and try again."
+            exit 1
+        }
+    }
+}
+
+foreach ($disti in $distis) {
     if ( $disti.ManagedBy) {
         $ownerId = $disti.ManagedBy
         $groupOwner = (Get-Recipient -Identity "$ownerId").DisplayName
