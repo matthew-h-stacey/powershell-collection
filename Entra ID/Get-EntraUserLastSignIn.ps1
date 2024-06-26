@@ -1,0 +1,114 @@
+function Get-EntraUserLastSignIn {
+
+    <#
+    .SYNOPSIS
+    Get a users last successful  sign-in timestamp and named location or IP address
+
+    .PARAMETER UserPrincipalName
+    The user to retrieve the last sign-in for
+
+    .PARAMETER IsInteractive
+    Set to true or false to pull the last interactive or non-interactive sign-in
+    NOTE: Does not currently work
+    Neither the 1.0 or beta API endpoints for the below Uri (and respective PS cmdlet) support non-interactive sign-ins 
+    https://learn.microsoft.com/en-us/graph/api/signin-get?view=graph-rest-beta&tabs=http
+
+    .PARAMETER NamedLocations
+    Optionally provide the array when executing the function instead of running it within this function
+    This is beneficial when running the function against a lot of users within the same tenant
+
+    .EXAMPLE
+    Get-EntraUserLastSignIn UserPrincipalName jsmith@contoso.com -IsInteractive $true
+    #>
+
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]
+        $UserPrincipalName,
+
+        [Parameter(Mandatory = $true)]
+        [boolean]
+        $IsInteractive,
+
+        [Parameter(Mandatory = $false)]
+        [object[]]
+        $NamedLocations,
+
+        [Parameter(Mandatory = $false)]
+        [switch]
+        $Debugging
+    )
+
+    if ( $Debugging ) {
+        $DebugPreference = "Continue"
+        Write-Debug "Debug messages enabled"
+    }
+
+    # Construct filtering parameters
+    $params = @{
+        Top      = 1
+        Property = @("CreatedDateTime", "Location", "IPAddress", "IsInteractive")
+    }
+    $filterBase = "UserPrincipalName eq '$UserPrincipalName' and status/errorCode ne 0"
+    switch ( $IsInteractive ) { 
+        True {
+            $loginType = "Interactive"
+            $params["Filter"] = $filterBase + " and IsInteractive eq true"
+
+        }
+        False {
+            $loginType = "Non-interactive"
+            $params["Filter"] = $filterBase + " and IsInteractive eq false"
+
+        }
+    }
+
+    $namedLocationsArray = $NamedLocations
+    # If NamedLocations were not provided, retrieve them now
+    if ( !($namedLocationsArray) ) {
+        Write-Debug "NamedLocations were not provided. Retrieving them now"
+        $namedLocationsArray = @()
+        Get-MgIdentityConditionalAccessNamedLocation | ForEach-Object {
+            if ( $_.AdditionalProperties.ipRanges.cidrAddress ) {
+                $namedLocationsArray += [PSCustomObject]@{
+                    DisplayName = $_.DisplayName
+                    CidrRange   = $_.AdditionalProperties.ipRanges.cidrAddress
+                }
+            }
+        }
+    } else {
+        Write-Debug "NamedLocations were already provided. Continuing"
+    }
+    Write-Debug "Found the following named locations"
+    foreach ( $location in $namedLocationsArray ) {
+        Write-Debug "[NAMEDLOCATION] $($location.DisplayName): $($location.CidrRange -join ', ')"
+    }
+
+    # Retrieve last sign-in and the named location. If there is no named location, return: $publicIP ($countryCode)
+    $lastSignIn = Get-MgAuditLogSignIn @params
+    if ( $lastSignIn.IPAddress ) {
+        $publicIP = $lastSignIn.IPAddress
+        Write-Debug "[IP] Public IP: $publicIP/32. Checking to see if it matches a named location ..."
+        $namedLocationMatch = $namedLocationsArray | Where-Object { $_.CidrRange -contains "$publicIP/32" }
+    }
+    if ( $namedLocationMatch ) {
+        $location = $namedLocationMatch.DisplayName -join ', '
+        Write-Debug "[MATCH] Matched location to $location"
+    } else {
+        $countryCode = $lastSignIn.Location.CountryOrRegion
+        Write-Debug "[NOMATCH] Unable to match IP to a location. Checking for country code next"
+        if ( $countryCode ) {
+            $location = "$publicIP ($countryCode)"
+            Write-Debug "Located country code: $countryCode"
+        } else {
+            $location = "$publicIP"
+            Write-Debug "Unable to locate country code"
+        }
+    }
+    return [PSCustomObject]@{
+        UserPrincipalName = $UserPrincipalName
+        Timestamp         = $lastSignIn.CreatedDateTime
+        LoginType         = $loginType
+        Location          = $location
+    }
+}
