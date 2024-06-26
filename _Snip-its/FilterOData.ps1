@@ -48,3 +48,14 @@ $params = @{
 $queryString = ($params.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join "&"
 $uri = "https://graph.microsoft.com/beta/auditLogs/signIns?$queryString"
 $lastSignIn = Invoke-MgGraphRequest -Method GET -Uri $uri
+
+
+########################
+# Filtering subproperties with OData format
+########################
+
+# standard powershell property equivalent:
+$object.property1.subproperty -eq $value
+
+# OData equivalent:
+$filter = "status/errorCode eq 0"
