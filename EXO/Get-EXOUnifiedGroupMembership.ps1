@@ -1,26 +1,48 @@
 <#
 .SYNOPSIS
-Retrieve membership of all Groups
+Retrieve membership of Microsoft 365 Groups
 
 .EXAMPLE
-$members = Get-EXOUnifiedGroupMembership
+$members = Get-EXOUnifiedGroupMembership -All
 
-.NOTES
-[ ] Add filter for specific Group
 #>
 
+param (
+    [Parameter(Mandatory = $true, ParameterSetName = "All")]
+    [switch]
+    $All,
+
+    [Parameter(Mandatory = $true, ParameterSetName = "Single")]
+    [string]
+    $PrimarySmtpAddress
+)
+
+switch ($PSCmdlet.ParameterSetName) {
+    'All' {
+        $filter = "groupTypes/any(c:c eq 'Unified')"
+        $groups = Get-MgGroup -Filter $filter -ExpandProperty Owners | Sort-Object DisplayName
+    }
+    'Single' {
+        try {
+            $filter = "groupTypes/any(c:c eq 'Unified') and mail eq '$PrimarySmtpAddress'" 
+            $groups = Get-MgGroup -Filter $filter -ExpandProperty Owners | Sort-Object DisplayName
+        } catch {
+            Write-Output "[ERROR] Unable to locate Microsoft 365 group: $PrimarySmtpAddress. Please check the provided value and try again."
+            exit 1
+        }
+    }
+}
+
 $membership = @()
-$allGroups = Get-UnifiedGroup -ResultSize Unlimited | Sort-Object PrimarySmtpAddress
-foreach ($g in $allGroups) {
-    $groupOwner = (Get-UnifiedGroup -Identity $g.Name | Get-UnifiedGroupLinks -LinkType Owners).DisplayName -join ','
-    $groupMembers = Get-UnifiedGroup -Identity $g.Name | Get-UnifiedGroupLinks -LinkType Members
-    foreach ($m in $groupMembers) {
+foreach ($group in $groups) {
+    $groupOwner = $group.Owners.AdditionalProperties.displayName
+    Get-MgGroupMember -GroupId $group.Id | ForEach-Object {
         $membership += [PSCustomObject]@{
-            GroupName   = $g.DisplayName
+            GroupName   = $group.DisplayName
             GroupType   = "M365 Group"
-            GroupOwner  = $groupOwner
-            MemberName  = $m.DisplayName
-            MemberEmail = $m.PrimarySmtpAddress
+            GroupOwner  = $groupOwner -join ', '
+            MemberName  = $_.AdditionalProperties.displayName
+            MemberEmail = $_.AdditionalProperties.userPrincipalName
         }
     }
 }
