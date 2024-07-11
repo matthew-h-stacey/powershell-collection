@@ -1,6 +1,6 @@
 # Example: Public download
 
-$Url = "https://portableapps.com/redir2/?a=FirefoxPortable&s=s&d=pa&f=FirefoxPortable_122.0_English.paf.exe"
+$Url = "https://portableapps.com/redir2/?a=FirefoxPortable&s=s&d=pa&f=FirefoxPortable_127.0.2_English.paf.exe"
 $LocalPath = "C:\TempPath"
 $FileName = "FirefoxPortable_120.0.1_English.paf.exe"
 $FilePath = "$LocalPath\$FileName"
