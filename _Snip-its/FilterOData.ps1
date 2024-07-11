@@ -59,3 +59,16 @@ $object.property1.subproperty -eq $value
 
 # OData equivalent:
 $filter = "status/errorCode eq 0"
+
+########################
+# Filtering at the end of a URI
+########################
+$Uri = "https://graph.microsoft.com/v1.0/auditLogs/signins?$filter=userPrincipalName eq 'user@example.com'"
+$Uri = "https://graph.microsoft.com/v1.0/auditLogs/signins?$filter=userPrincipalName eq 'user@example.com'&$top=1"
+$Uri = "auditLogs/signins?`$filter=userPrincipalName eq '{0}' and status/errorCode ne 0 and IsInteractive eq {1}`&`$top=1" -f $PSItem.UserPrincipalName, $IsInteractive
+
+########################
+# Selecting certain properties in a URI request
+# Note the position of $select and that it is before top
+########################
+$urlTemplate = "auditLogs/signins?`$filter=userPrincipalName eq '{UserPrincipalName}' and status/errorCode ne 0 and IsInteractive eq true&`$select=createdDateTime,location,ipAddress,isInteractive&`$top=1"
