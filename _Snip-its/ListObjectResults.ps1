@@ -1,4 +1,4 @@
-$results = New-Object System.Collections.Generic.List[System.Object]
+$results = [System.Collections.Generic.List[System.Object]]::new()
 
 foreach ($obj in $Objects) {
     $UserExport = [PSCustomObject]@{
