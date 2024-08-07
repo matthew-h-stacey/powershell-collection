@@ -1,75 +1,103 @@
 <#
 .DESCRIPTION
 This script takes a pre-filled CSV and iterates through it to update user properties. The CSV must include a header that contains a UserIdentifier (UserPrincipalName, PrimarySmtpAddress) and the rest must be valid properties available in Update-MgUser.
+The script will update all properties in the CSV with the exception of the UserIdentifier
+
+.PARAMETER CsvPath
+Full file/folder path of the CSV
+
+.PARAMETER UserIdentifier
+This is the user identifier in the CSV file. Typically this should be UserPrincipalName or PrimarySmtpAddress
+
+.PARAMETER ExportPath
+Directory to export output to (ex: C:\TempPath)
+
+.PARAMETER OverrideBlankValue
+If this switch is used and there is a blank value in the provided CSV, it will overwrite the value of the user's property. Use this switch to potentially clear values on the user object. Omit this switch to update cells with values, only
+
+.PARAMETER SkipBackup
+Skip the property backup. Useful if re-running this script and the backup was taken the first time the script ran
+
+.PARAMETER WhatIf
+Record changes but don't actually make them
 
 .EXAMPLE
 Sample execution
 1) Create and populate a CSV (C:\TempPath\input.csv) with the headers: UserPrincipalName,DisplayName,Department,JobTitle,EmployeeId
-2) Execute: Update-EntraIDUserProperties.ps1 -CsvPath C:\TempPath\input.csv -UserIdentifier UserPrincipalName -ExportPath C:\TempPath
+2) Execute: 
+Connect-MgGraph -scopes User.ReadWrite.All
+Update-EntraIDUserProperties.ps1 -CsvPath C:\TempPath\input.csv -UserIdentifier UserPrincipalName -ExportPath C:\TempPath
 3) Review output in ExportPath
-The script will update all properties in the CSV with the exception of the UserIdentifier
 
 .NOTES
 To-Do
-- (None)
+- Fix "Manager" property in the backup (lines ~234) returns an object instead of value (Microsoft.Graph.PowerShell.Models.MicrosoftGraphDirectoryObject)
 #>
 
 param (
-    # Full file/folder path of the CSV
     [Parameter(Mandatory = $true)]
-    [String]
+    [string]
     $CsvPath,
 
-    # This is the identifier in the CSV file. Typically this should be UserPrincipalName or PrimarySmtpAddress
     [Parameter(Mandatory = $true)]
-    [String]
+    [string]
     $UserIdentifier,
 
-    # Directory to export output to (ex: C:\TempPath)
     [Parameter(Mandatory = $true)]
-    [String]
+    [string]
     $ExportPath,
 
-    # If this switch is used and there is a blank value in the provided CSV, it will overwrite the value of the user's property. Use this switch to potentially clear values on the user object. Omit this switch to update cells with values, only
     [Parameter(Mandatory = $false)]
-    [Switch]
+    [switch]
     $OverwriteBlankValue,
 
-    # Record changes but don't actually make them
     [Parameter(Mandatory = $false)]
-    [Switch]
+    [boolean]
+    $SkipBackup,
+
+    [Parameter(Mandatory = $false)]
+    [switch]
     $WhatIf
 )
 
 function Update-Property {
 
+    <#
+    .SYNOPSIS
+    Takes an Entra user (MgUser object), property to update, and new value, then attempts to update the property
+
+    .PARAMETER UserObject
+    An MgUser object for a user to update properties on
+
+    .PARAMETER Property
+    The property to update (ex: "Department")
+
+    .PARAMETER NewValue
+    The new value to set (ex: "Human Resources")
+
+    .EXAMPLE
+    Update-Property -UserObject $mgUser -Property "Department" -NewValue "Human Resources"
+    #>
+
     [CmdletBinding()]
     param (
-        # The Entra ID user object to be passed to the function
         [Parameter(Mandatory = $true)]
         [Object]
         $UserObject,
 
-        # The property to update
         [Parameter(Mandatory = $true)]
         [string]
         $Property,
 
-        # The new value for the property
         [Parameter(Mandatory = $true)]
         [string]
         $NewValue
     )
 
-    <#
-    .SYNOPSIS
-    Executes the property update for a given user
-
-    .EXAMPLE
-    Update-Property -UserObject (Get-MgUser -UserId jsmith@contoso.com) -Property Department -NewValue Sales
-    #>
-
     # Take specific action based on the property
+    # - Updating Manager requires usage of Set-MgUserManagerByRef 
+    # - Updating extensionAttributes requires updating -AdditionalProperties with a hash table object
+    # - All other variables that can be directly passed to Update-MgUser are passed to Update-MgUser
     switch ($Property) {
         "Manager" {
             # Retrieve the current/old Manager UPN. If there is no Manager, set the value to "(None)"
@@ -91,9 +119,13 @@ function Update-Property {
                         Write-Output "[INFO][WHATIF] $($UserObject.UserPrincipalName): Manager updated from $oldValue -> $($newManager.UserPrincipalName)"
                     } else {
                         $body = @{
-                            "@odata.id" = "https://graph.microsoft.com/v1.0/users/$($newManager2.Id)"
+                            "@odata.id" = "https://graph.microsoft.com/v1.0/users/$($newManager.Id)"
                         }
-                        Set-MgUserManagerByRef -UserId $UserObject.Id -BodyParameter $body
+                        if ($UserObject.Id){
+                            Set-MgUserManagerByRef -UserId $UserObject.Id -BodyParameter $body
+                        } else {
+                            Set-MgUserManagerByRef -UserId $UserObject.UserPrincipalName -BodyParameter $body
+                        }
                         Write-Output "[INFO] $($UserObject.UserPrincipalName): Manager updated from $oldValue -> $($newManager.UserPrincipalName)"
                     }
                     $changed = $True
@@ -105,20 +137,53 @@ function Update-Property {
                 }
             }
         }
-        default {
-            # This portion of the switch is for all other generic properties that are set via Update-MgUser (ex: Department, JobTitle, etc.)
+        { $_ -like "extensionAttribute[1-9]" -or $_ -like "extensionAttribute1[0-5]" } {
+            # Handling for extensionAttribute1-extensionAttribute15
 
-            # For all properties except manager, retrieve the current value and store it as $oldValue. If $oldValue doesn't exist, instead label it as "N/A"
-            # This excludes "Manager" because Manager requires a specific cmdlet to pull the property (ex: $user.Manager is not a valid property)
-            $oldValue = $UserObject.$Property
+            # First, retrieve the current/old value
+            $oldValue = $UserObject.OnPremisesExtensionAttributes.$Property
             if (!$oldValue) { 
                 $oldValue = "N/A"
             }
-
+            # Compare the current value to the provided one
+            if ( $oldValue -eq $NewValue) {
+                Write-Output "[INFO] $($UserObject.UserPrincipalName): No change to $Property"
+                $changed = $False
+            } else {
+                if ( $WhatIf) {
+                    Write-Output "[INFO][WHATIF] $($UserObject.UserPrincipalName): $Property updated from $oldValue -> $NewValue"
+                } else {
+                    # If the current value doesn't match the input, attempt to update it
+                    try {
+                        Update-MgUser -UserId $UserObject.UserPrincipalName -AdditionalProperties @{
+                            "onPremisesExtensionAttributes" = @{
+                                $Property = $NewValue
+                            }
+                        }
+                        Write-Output "[INFO] $($UserObject.UserPrincipalName): $Property updated from $oldValue -> $NewValue"
+                        $changed = $True
+                    } catch {
+                        $errorMessage = "[ERROR] $($UserObject.UserPrincipalName): Failed to update $property. Error: $($_.Exception.Message)"
+                        Write-Output $errorMessage
+                        $errorLog.Add($errorMessage)
+                        $changed = $False
+                    }
+                }
+            }
+        }
+        default {
+            # This portion of the switch is for all other generic properties that are set via Update-MgUser (ex: Department, JobTitle, etc.)
+            # First, retrieve the current/old value
+            $oldValue = $UserObject.$property
+            if (!$oldValue) { 
+                $oldValue = "N/A"
+            }
+            # Compare the current value to the provided one
             if ( $UserObject.$Property -eq $NewValue) {
                 Write-Output "[INFO] $($UserObject.UserPrincipalName): No change to $Property"
                 $changed = $False
             } else {
+                # If the current value doesn't match the input, attempt to update it
                 $params = @{
                     $Property = $NewValue
                 }
@@ -155,65 +220,97 @@ function Start-PropertyUpdateWorkflow {
     .SYNOPSIS
     Pulls in a CSV and iterates through it to retrieve user objects, then calls a separate function to update each property
 
+    .PARAMETER CSV
+    Full file/folder path to the CSV
+
+    .PARAMETER UserIdentifier
+    This is the user identifier in the CSV file. Typically this should be UserPrincipalName or PrimarySmtpAddress
+
     .EXAMPLE
     Start-PropertyUpdateWorkflow -CSV $CsvPath
     #>
 
     param(
-        # Path to the CSV
         [Parameter(Mandatory = $true)]
         [String]
         $CSV,
 
-        # This is the identifier in the CSV file. Typically this should be UserPrincipalName, but may be PrimarySmtpAddress or other property depending on what is provided
         [Parameter(Mandatory = $true)]
         [String]
         $UserIdentifier
     )
 
-    $csvUsers = Import-Csv -Path $CSV 
+    $csvUsers = Import-Csv -Path $CSV
+
+    # Validate the UserIdentifier before proceeding
+    if ( $UserIdentifier -notin ($csvUsers | Get-Member | Select-Object -expand Name)){
+        Write-Output "[ERROR] UserIdentifier '$UserIdentifier' was not found in the provided CSV. Please double-check the input file and try again"
+        exit 1
+    }
+
+    # Retrieve the properties from the CSV to be updated
+    # Also adds "OnPremisesExtensionAttributes" to the property list in the event that one of the properties to be updated
+    # NOTE: The input file may reference an attribute like extensionAttribute1, but the property to pull those values is OnPremisesExtensionAttributes
+
+    # This variable is used to track which properties need to be changed
     $propsExclIdentifier = $csvUsers | Get-Member -MemberType NoteProperty | Where-Object { $_.Name -notLike $userIdentifier } | Select-Object -ExpandProperty Name 
+
+    # This variable is used to select the user and relevant properties
     $propsInclIdentifier = $csvUsers | Get-Member -MemberType NoteProperty | Select-Object -ExpandProperty Name
+    if ( $propsInclIdentifier -contains "OnPremisesExtensionAttributes" ) {
+        $selectedProps = $propsInclIdentifier | Where-Object {$_ -notLike "extensionAttribute*"}
+    } else {
+        $selectedProps = $propsInclIdentifier | Where-Object { $_ -notLike "extensionAttribute*" } 
+        $selectedProps += "OnPremisesExtensionAttributes"
+    }
+
     $backup = @() # array to be exported to CSV
     $locatedUsers = @() # Entra ID users located during the backup portion, referenced during the property execution
 
-    # Back up user properies first
+
+    # Locate valid users from the input
     $csvUsers  | ForEach-Object {
         try {
-            $mgUser = Get-MgUser -UserId $_.$UserIdentifier -Property $propsInclIdentifier  | Select-Object $propsInclIdentifier
-            $userProps = [ordered]@{}
-            foreach ($property in $mgUser.psobject.properties) {                
-                if ( $property.Value -is [System.String[]]) {
-                    $userProps[$property.Name] = $property.Value -join ', '
-                } else {
-                    $userProps[$property.Name] = $property.Value                    
+            $userId = $_.$UserIdentifier
+            $mgUser = Get-MgUser -UserId $userId -Property $propsInclIdentifier  -ErrorAction Stop | Select-Object $propsInclIdentifier
+            $locatedUsers += $userId
+            if (!($SkipBackup)) {
+                # Store the properties of the users before proceeding
+                $userProps = [ordered]@{}
+                foreach ($property in $mgUser.psobject.properties) {                
+                    if ( $property.Value -is [System.String[]]) {
+                        $userProps[$property.Name] = $property.Value -join ', '
+                    } else {
+                        $userProps[$property.Name] = $property.Value                    
+                    }
                 }
-            }
-            $backup += New-Object PSObject -Property $userProps
-            $locatedUsers += $_.$UserIdentifier
+                $backup += New-Object PSObject -Property $userProps
+            }            
         } catch {
-            Write-Output "[WARNING] $($_.$UserIdentifier): SKIPPED, unable to find an Entra ID user using provided the identifier"    
-            $skippedUsers.Add($_.$UserIdentifier)
+            Write-Output "[WARNING] $($userId): SKIPPED, unable to find an Entra ID user using provided the identifier"    
+            $skippedUsers.Add($userId)
             continue
         }
     }
-    if ( $backup ) {
+    if ( $backup ) {        
         $backup | Export-Csv $backupFile -NoTypeInformation
         Write-Output "[INFO] Exported user property backup to: $backupFile"
     }
+
+    
 
     # Iterate over the properties to update. Only overwrite user properties with blank values if $OverwriteBlankValue is used. Otherwise, only update properties that have values in the CSV
     foreach ($user in $csvUsers) {
         if ( $locatedUsers -contains $user.$UserIdentifier ) {
             # Locate user objects that were previously stored in $locatedUsers
-            $mgUser = Get-MgUser -UserId $user.$UserIdentifier -Property $propsInclIdentifier
+            $mgUser = Get-MgUser -UserId $user.$UserIdentifier -Property $selectedProps
             foreach ($property in $propsExclIdentifier) {
                 if ( $OverwriteBlankValue ) {
                     # Update property regardless of what is in the cell
-                    Update-Property -userObject $mgUser -Property $property -newValue $user.$property
+                    Update-Property -UserObject $mgUser -Property $property -NewValue $user.$property
                 } elseif (-not [string]::IsNullOrWhiteSpace($user.$property)) {
                     # Update the property only if the cell contains text
-                    Update-Property -userObject $mgUser -Property $property -newValue $user.$property
+                    Update-Property -UserObject $mgUser -Property $property -NewValue $user.$property
                 }
             }
         }
@@ -250,7 +347,6 @@ $backupFile = "$ExportPath\EntraID_user_property_backup_$((Get-Date -Format "MM-
 $results = New-Object System.Collections.Generic.List[System.Object]
 $skippedUsers = New-Object System.Collections.Generic.List[System.Object]
 $errorLog = New-Object System.Collections.Generic.List[System.Object]
-
 
 ####################################
 
