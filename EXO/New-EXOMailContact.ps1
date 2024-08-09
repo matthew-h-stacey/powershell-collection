@@ -40,7 +40,7 @@ function New-EXOMailContact {
         $ExternalEmailAddress 
     )
 
-    $isSuccessful = $true
+    $operationSucceeded = $true
     try {
         $null = New-MailContact  -Name $DisplayName -Alias $Alias -ExternalEmailAddress "SMTP:$ExternalEmailAddress" -ErrorAction Stop -WarningAction Stop
         $emailAddresses = "SMTP:$PrimarySmtpAddress", "smtp:$ExternalEmailAddress"
@@ -48,15 +48,15 @@ function New-EXOMailContact {
             Set-Mailcontact $Alias -EmailAddresses $emailAddresses -ErrorAction Stop -WarningAction Stop
         } catch {
             Write-Output "[ERROR] Failed to set email addresses on mail contact. Error: $($_.Exception.Message)"
-            $isSuccessful = $false
+            $operationSucceeded = $false
             exit 1
         }
     } catch {
         Write-Output "[ERROR] Failed to create new mail contact: $DisplayName. Error: $($_.Exception.Message)"
-        $isSuccessful = $false
+        $operationSucceeded = $false
         exit 1
     }
-    if ( $isSuccessful ) {
+    if ( $operationSucceeded ) {
         Write-Output "[SUCCESS] Created new mail contact '$DisplayName' ($PrimarySmtpAddress -> $ExternalEmailAddress)"
     }
 	
