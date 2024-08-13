@@ -1,7 +1,7 @@
 function Get-EntraNamedLocations {
     <#
     .SYNOPSIS
-    Returns an array of hash tables containing all named locations in a tenant
+    Returns an array of hash tables containing all named locations in a tenant. Requires at least Policy.Read.All
 
     .EXAMPLE
     $locations = Get-EntraNamedLocations
