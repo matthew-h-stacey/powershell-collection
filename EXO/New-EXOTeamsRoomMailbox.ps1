@@ -16,11 +16,26 @@ function New-EXOTeamsRoomMailbox {
     .PARAMETER Password
     The password for the mailbox
 
+    .PARAMETER City
+    The city where the conference room is located
+
+    .PARAMETER State
+    The state where the conference room is located
+
+    .PARAMETER Floor
+    The floor number where the conference room is located
+
+    .PARAMETER FloorLabel
+    A friendly name to describe the floor number where this conference room is located (ex: Ground, Main)
+
+    .PARAMETER Capacity
+    The capacity of this conference room
+
     .NOTES
     Reference https://learn.microsoft.com/en-us/microsoftteams/rooms/create-resource-account?tabs=exchange-online%2Cgraph-powershell-password for additional information
     #>
 
-    [SkyKickCommand(DisplayName = "Set Parameter Sections", Sections = { "Basic Details", "Password" })]
+    [SkyKickCommand(DisplayName = "Set Parameter Sections", Sections = { "Basic Details", "Room location", "Password" })]
     param (
         [SkyKickParameter(
                 DisplayName = "UserPrincipalName",    
@@ -64,7 +79,57 @@ function New-EXOTeamsRoomMailbox {
             ErrorMessage = "The specified password does not comply with password complexity requirements. Please provide a different password."
         )]
         [Parameter (Mandatory = $true)]
-        [SecureString]$Password        
+        [SecureString]$Password,
+        
+        [SkyKickParameter(
+            DisplayName = "City",
+            Section = "Room location",
+            DisplayOrder = 1,
+            HintText = "The city where this conference room is located."
+        )]
+        [Parameter(Mandatory = $true)]
+        [string]
+        $City,
+
+        [SkyKickParameter(
+            DisplayName = "State",
+            Section = "Room location",
+            DisplayOrder = 2,
+            HintText = "The state where this conference room is located."
+        )]
+        [Parameter(Mandatory = $true)]
+        [string]
+        $State,
+
+        [SkyKickParameter(
+            DisplayName = "Floor",
+            Section = "Room location",
+            DisplayOrder = 3,
+            HintText = "The floor number where this conference room is located."
+        )]
+        [Parameter(Mandatory = $true)]
+        [string]
+        $Floor,
+
+        [SkyKickParameter(
+            DisplayName = "Floor label",
+            Section = "Room location",
+            DisplayOrder = 4,
+            HintText = "A friendly name to describe the floor number where this conference room is located (ex: Ground, Main)."
+        )]
+        [Parameter(Mandatory = $false)]
+        [string]
+        $FloorLabel,
+
+        [SkyKickParameter(
+            DisplayName = "Floor",
+            Section = "Room location",
+            DisplayOrder = 5,
+            HintText = "The capacity of this conference room"
+        )]
+        [Parameter(Mandatory = $true)]
+        [int]
+        $Capacity
     )
 
     $operationSucceeded = $true
@@ -114,7 +179,34 @@ function New-EXOTeamsRoomMailbox {
         $operationSucceeded = $false
         exit 1
     }
+
+    # 4) Set location metadata for Room Finder
+    if ( $City ) {
+        $locationParams.City = $City
+    }
+    if ( $State ) {
+        $locationParams.State = $State
+    }
+    if ( $Floor ) {
+        $locationParams.Floor = $Floor
+    }
+    if ( $FloorLabel ) {
+        $locationParams.FloorLabel = $FloorLabel
+    }
+    if ( $Capacity ) {
+        $locationParams.Capacity = $Capacity
+    }
+
+    try { 
+        Set-Place -Identity $UserPrincipalName @locationParams
+    } catch {
+        Write-Output "[ERROR] Failed to set location metadata on room mailbox: $UserPrincipalName. Error: $($_.Exception.message)"
+        $operationSucceeded = $false
+        exit 1
+    }
+
     if ( $operationSucceeded ) {
         Write-Output "[SUCCESS] Created new resource room calendar successfully"
     }
+
 }
