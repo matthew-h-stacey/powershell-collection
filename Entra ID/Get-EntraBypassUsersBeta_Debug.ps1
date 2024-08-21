@@ -27,7 +27,7 @@ foreach ($bypassgroup in $bypassgroups) {
 $urlTemplate = "auditLogs/signins?`$filter=userPrincipalName eq '{UserPrincipalName}' and status/errorCode ne 0 and IsInteractive eq true&`$select=UserPrincipalName,createdDateTime,location,ipAddress,isInteractive&`$top=1"
 $ApiQuery = $urlTemplate
 $placeholder = "UserPrincipalName"
-$InputObjects = $allGroupMembers | Select-Object -Unique -Property UserPrincipalName
+$InputObjects = $allGroupMembers | Sort-Object -Unique -Property UserPrincipalName
 
 
 
@@ -97,21 +97,22 @@ for ($i = 0; $i -lt $InputObjects.Count; $i += $batchSize) {
     foreach ( $response in $graphBatchResponse.responses ) {
         # Store the current response in a variable
         $originalRequest = $requestCache[$response.id]
-        $retryCount = 0
+        $retryCount = 1
+        $timeStamp = Get-Date -Format "yyyy-MM-ddTHH:mm:ssK"
 
         switch ($response.status) {
             200 {
                 # 200 = OK
-                Write-Output "[$($response.id)] Request succeeded with status code: $($response.status)."
+                Write-Output "$timeStamp [SUCCESS] Request ID $($response.id) succeeded with status code: $($response.status)"
                 $outputList.Add([PSCustomObject]$response.body)
             }
             429 {
                 # 429 = Too many requests (throttling)
                 $retryAfter = $response.headers.'retry-after'
-                Write-Output "[$($response.id)] Request was throttled. Retrying after $retryAfter seconds."
+                Write-Output "$timeStamp [WARNING] Request ID $($response.id) was throttled. Retrying after $retryAfter seconds"
                 do {
                     Start-Sleep -Seconds $retryAfter
-                    Write-Output "[$($response.id)] Retrying batch URL: $($originalRequest.Url)"
+                    Write-Output "$timeStamp [INFO] Request ID $($response.id)] - retrying request... (attempt $retryCount/$maxRetries)"
 
                     # Retry the throttled request
                     $throttledRequest = @{
@@ -133,12 +134,14 @@ for ($i = 0; $i -lt $InputObjects.Count; $i += $batchSize) {
                     try {
                         $retryResponse = Invoke-MgGraphRequest @retryParams
                         if ( $retryResponse.responses.status -eq 200) {
+                            $timeStamp = Get-Date -Format "yyyy-MM-ddTHH:mm:ssK"
                             $outputList.Add([PSCustomObject]$retryResponse.responses.body)
+                            Write-Output "$timeStamp [SUCCESS] Request ID $($response.id) succeeded with status code: $($retryResponse.responses.status)"
                             break
                         }
                         $retryCount++
                         if ($retryCount -ge $maxRetries) {
-                            Write-Output "[$($response.id)] Max retries reached. Skipping."
+                            Write-Output "$timeStamp [ERROR] Request ID $($response.id)] skipped due to max retries reached"
                             $errorList.Add([pscustomobject]@{
                                     Id     = $response.id
                                     Status = $retryResponse.responses.status
@@ -149,7 +152,7 @@ for ($i = 0; $i -lt $InputObjects.Count; $i += $batchSize) {
                         }
                         $retryAfter = $initialDelay * [math]::Pow(2, $retryCount)
                     } catch {
-                        Write-Output "[$($response.id)] Request failed after retry with status code $($retryResponse.status). Error: $($retryResponse.body.error.message)"
+                        Write-Output "$timeStamp [ERROR] Request ID $($response.id)] failed after retry with status code $($retryResponse.status). Error: $($retryResponse.body.error.message)"
                         $errorList.Add([pscustomobject]@{
                                 Id     = $response.id
                                 Status = $retryResponse.responses.status
@@ -161,30 +164,54 @@ for ($i = 0; $i -lt $InputObjects.Count; $i += $batchSize) {
             }
             default {
                 # Log errors for unexpected status codes
-                Write-Output "Request ID $($response.id) failed with status code $($response.status). Error: $($response.body.error.message)"
+                Write-Output "$timeStamp [ERROR] Request ID $($response.id)] failed with status code $($response.status). Error: $($response.body.error.code) $($response.body.error.message)"
                 $errorList.Add([pscustomobject]@{
-                        Id     = $response.id
-                        Status = $response.status
-                        Error  = $response.body
-                    })
-
+                    Id     = $response.id
+                    Status = $response.status
+                    Url    = $originalRequest.url
+                    Error  = $response.body
+                })
             }
         }            
     }
 }
 $outputList
 
+# convert to hash
+$auditLogOutput = $outputList
+$auditlogHash = ConvertTo-HashTable -List $auditLogOutput.value -KeyName UserPrincipalName
 
-$test = @()
-$outputList.value | Foreach-object {
-    $t = [PSCustomObject]@{
-        Id = $_.Id
-        userPrincipalName = $_.userPrincipalName
-        displayName = $_.displayName
-        accountEnabled = $_.accountEnabled
-        assignedLicenses = $_.assignedLicenses
-        lastSuccessfulSignInDateTime = $_.signInActivity.lastSuccessfulSignInDateTime
-        lastNonInteractiveSignInDateTime = $_.signInActivity.lastNonInteractiveSignInDateTime
+$userOutput = $outputList
+$userHash = ConvertTo-HashTable -List $userOutput -KeyName UserPrincipalName
+
+$mergedHash = Merge-HashTables -First $userHash -Second $auditlogHash
+
+
+# Format licenses
+if ( $h3[$key].assignedLicenses ) {
+    $licenses = @()
+    $skus = $h3[$key].assignedLicenses
+    foreach ($sku in $skus.skuId) {
+        $licenses += ($skusMappingTable | Where-Object { $_.GUID -eq "$sku" } | Select-Object -expand DisplayName -Unique)
     }
-    $test+=$t
-} | Export-Csv c:\temppath\asdasd.csv -notypeinformation
+    $licenses = ($licenses | Sort-Object) -join ', '
+    $h3[$key] | Add-Member -MemberType NoteProperty -Name Licenses -Value $licenses -Force
+}
+
+
+$mergedHash.values | ForEach-Object {
+    [PSCustomObject]@{
+        Id                               = $_.Id
+        userPrincipalName                = $_.userPrincipalName
+        displayName                      = $_.displayName
+        accountEnabled                   = $_.accountEnabled
+        assignedLicenses                 = $_.assignedLicenses
+        lastSuccessfulSignInDateTime     = $_.signInActivity.lastSuccessfulSignInDateTime
+        lastNonInteractiveSignInDateTime = $_.signInActivity.lastNonInteractiveSignInDateTime
+        location                         = $_.location
+        ipAddress                        = $_.ipAddress
+        isInteractive                    = $_.isInteractive
+    }
+} | Export-Csv c:\temppath\asdasd.csv -NoTypeInformation
+
+

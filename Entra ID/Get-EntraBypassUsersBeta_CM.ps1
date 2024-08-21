@@ -7,7 +7,13 @@ function Get-EntraBypassGroupMembersBeta {
     )
 
     function ConvertTo-HashTable {
-        # Function to convert list to hash table
+        <#
+        .SYNOPSIS
+        Quick function to convert a list to hash table
+
+        .EXAMPLE
+        ConvertTo-HashTable -List $listObjects -KeyName UserPrincipalName
+        #>
         param (
             [Parameter(Mandatory = $true)]
             [System.Collections.Generic.List[System.Object]]
@@ -21,10 +27,19 @@ function Get-EntraBypassGroupMembersBeta {
         $hashTable = @{}
         if ( $List ) {
             foreach ($item in $List) {
-                $hashTable[$item.$KeyName] = $item
+                if ( $item ) {
+                    if ( $item.$KeyName ) {
+                        $hashTable[$item.$KeyName] = $item
+                    } else {
+                        Write-Output "$KeyName does not exist on $item"
+                    }
+                }
             }
+            return $hashTable
+        } else {
+            Write-Output "No input provided"
         }
-        return $hashTable
+        
     }
 
     function Merge-HashTables {
