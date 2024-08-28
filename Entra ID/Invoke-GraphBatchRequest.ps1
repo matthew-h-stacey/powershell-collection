@@ -102,16 +102,16 @@ function Invoke-GraphBatchRequest {
             switch ($response.status) {
                 200 {
                     # 200 = OK
-                    Write-Output "$timeStamp [SUCCESS] Request ID $($response.id) succeeded with status code: $($response.status)"
+                    Write-Verbose "$timeStamp [SUCCESS] Request ID $($response.id) succeeded with status code: $($response.status)"
                     $outputList.Add([PSCustomObject]$response.body)
                 }
                 429 {
                     # 429 = Too many requests (throttling)
                     $retryAfter = $response.headers.'retry-after'
-                    Write-Output "$timeStamp [WARNING] Request ID $($response.id) was throttled. Retrying after $retryAfter seconds"
+                    Write-Verbose "$timeStamp [WARNING] Request ID $($response.id) was throttled. Retrying after $retryAfter seconds"
                     do {
                         Start-Sleep -Seconds $retryAfter
-                        Write-Output "$timeStamp [INFO] Request ID $($response.id)] - retrying request... (attempt $retryCount/$maxRetries)"
+                        Write-Verbose "$timeStamp [INFO] Request ID $($response.id)] - retrying request... (attempt $retryCount/$maxRetries)"
 
                         # Retry the throttled request
                         $throttledRequest = @{
@@ -135,12 +135,12 @@ function Invoke-GraphBatchRequest {
                             if ( $retryResponse.responses.status -eq 200) {
                                 $timeStamp = Get-Date -Format "yyyy-MM-ddTHH:mm:ssK"
                                 $outputList.Add([PSCustomObject]$retryResponse.responses.body)
-                                Write-Output "$timeStamp [SUCCESS] Request ID $($response.id) succeeded with status code: $($retryResponse.responses.status)"
+                                Write-Verbose "$timeStamp [SUCCESS] Request ID $($response.id) succeeded with status code: $($retryResponse.responses.status)"
                                 break
                             }
                             $retryCount++
                             if ($retryCount -ge $maxRetries) {
-                                Write-Output "$timeStamp [ERROR] Request ID $($response.id)] skipped due to max retries reached"
+                                Write-Verbose "$timeStamp [ERROR] Request ID $($response.id)] skipped due to max retries reached"
                                 $errorList.Add([pscustomobject]@{
                                         Id     = $response.id
                                         Status = $retryResponse.responses.status
@@ -151,7 +151,7 @@ function Invoke-GraphBatchRequest {
                             }
                             $retryAfter = $initialDelay * [math]::Pow(2, $retryCount)
                         } catch {
-                            Write-Output "$timeStamp [ERROR] Request ID $($response.id)] failed after retry with status code $($retryResponse.status). Error: $($retryResponse.body.error.message)"
+                            Write-Verbose "$timeStamp [ERROR] Request ID $($response.id)] failed after retry with status code $($retryResponse.status). Error: $($retryResponse.body.error.message)"
                             $errorList.Add([pscustomobject]@{
                                     Id     = $response.id
                                     Status = $retryResponse.responses.status
@@ -163,7 +163,7 @@ function Invoke-GraphBatchRequest {
                 }
                 default {
                     # Log errors for unexpected status codes
-                    Write-Output "$timeStamp [ERROR] Request ID $($response.id)] failed with status code $($response.status). Error: $($response.body.error.code) $($response.body.error.message)"
+                    Write-Verbose "$timeStamp [ERROR] Request ID $($response.id)] failed with status code $($response.status). Error: $($response.body.error.code) $($response.body.error.message)"
                     $errorList.Add([pscustomobject]@{
                             Id     = $response.id
                             Status = $response.status
