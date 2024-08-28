@@ -112,12 +112,12 @@ function Get-EntraBypassGroupMembersBeta {
         }
         if ( $allGroupMembers ) {
             # Batch - get all users with selected properties
-            $urlTemplate = "/users/{Id}?`$select=UserPrincipalName,AccountEnabled,AssignedLicenses,DisplayName,SignInActivity"
-            $mgUserObjects = Invoke-GraphBatchRequest -InputObjects $allGroupMembers -ApiQuery $urlTemplate -Placeholder "Id"
+            $urlTemplate = "/users/{Id}?`$select=UserPrincipalName,AccountEnabled,AssignedLicenses,DisplayName,SignInActivity,Id"
+            $mgUserObjects = Invoke-GraphBatchRequest -InputObjects $allGroupMembers -ApiQuery $urlTemplate -Placeholder "Id" -Verbose
 
             # Batch - get last sign-in for each user
-            $urlTemplate = "auditLogs/signins?`$filter=userPrincipalName eq '{UserPrincipalName}' and status/errorCode ne 0 and IsInteractive eq true&`$select=UserPrincipalName,createdDateTime,location,ipAddress,isInteractive&`$top=1"
-            $mgAuditLogs = Invoke-GraphBatchRequest -InputObjects $allGroupMembers -ApiQuery $urlTemplate -Placeholder "UserPrincipalName"
+            $urlTemplate = "auditLogs/signins?`$filter=userPrincipalName eq '{UserPrincipalName}' and status/errorCode ne 0 and IsInteractive eq true&`$select=UserPrincipalName,createdDateTime,location,ipAddress,isInteractive,Id&`$top=1"
+            $mgAuditLogs = Invoke-GraphBatchRequest -InputObjects $allGroupMembers -ApiQuery $urlTemplate -Placeholder "UserPrincipalName" -Verbose
             $mgAuditLogsFormatted = [System.Collections.Generic.List[System.Object]]::new()
             $mgAuditLogs | ForEach-Object {
                 if ( $_.value ) {
