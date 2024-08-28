@@ -4,18 +4,22 @@
 # Example 1
 ########################
 
-$ObjectType = "users" # example, "users" or "devices"
-$URI = 'https://graph.microsoft.com/v1.0/' + $ObjectType + '?$top=999'
+$objectType = "users" # ex: "groups" "users" "devices"
+$uri = 'https://graph.microsoft.com/v1.0/' + $ObjectType + '?$top=999'
 
-$MSGraphOutput = @()
+$msGraphResponse = @()
 $nextLink = $null
 do {
-    $uri = if ($nextLink) { $nextLink } else { $URI }
+    $uri = if ($nextLink) {
+        $nextLink
+    } else {
+        $URI
+    }
     $response = Invoke-MgGraphRequest -Uri $uri -Method GET
     $output = $response.Value
-    $MSGraphOutput += $output
+    $msGraphResponse += $output
     $nextLink = $response.'@odata.nextLink'
-} until (-not $nextLink)
+} until (-not $nextLink )
 
 ########################
 # Example 2
