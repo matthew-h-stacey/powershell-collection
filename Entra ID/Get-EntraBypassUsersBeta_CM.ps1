@@ -93,7 +93,7 @@ function Get-EntraBypassGroupMembersBeta {
         # Retrieve named locations
         $namedLocations = Get-EntraNamedLocations
 
-        # All all accounts with UPNs in any/all bypass groups to an empty list 
+        # Add all accounts with UPNs in any/all bypass groups to an empty list 
         $allGroupMembers = [System.Collections.Generic.List[System.Object]]::new()
         $bypassgroups = Get-MgGroup -Search "displayName:bypass" -Sort "displayName" -CountVariable CountVar -ConsistencyLevel eventual 
         foreach ($bypassgroup in $bypassgroups) {
