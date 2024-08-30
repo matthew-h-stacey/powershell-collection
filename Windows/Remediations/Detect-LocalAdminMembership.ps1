@@ -1,3 +1,6 @@
+# Account(s) that should retain local admin privileges
+$RetainAdmin = @("cloud_laps", "AzureAD\MattStacey", "AzureAD\CJTarbox", "AzureAD\BenLouis")
+
 function New-Folder {
     
     <#
@@ -76,14 +79,18 @@ function Get-UnwantedLocalAdmins {
     .SYNOPSIS
     Return a list of all local admins except for $RetainAdmin
 
+    .PARAMETER RetainAdmin
+    Enter the name(s) of the user who should retain their admin access to the PC after the remediation executes (ex: a Windows LAPS user account). For local user accounts only put the name of the user without a prepended hostname. For Entra accounts, format as AzureAD\JohnSmith
+
     .EXAMPLE
     Get-UnwantedLocalAdmins -RetainAdmin cloud_laps
+    Get-UnwantedLocalAdmins -RetainAdmin @("cloud_laps","AzureAD\JohnSmith")
     #>
 
     param (
-        # Enter the name of the user who should retain their admin access to the PC after the remediation executes (ex: a Windows LAPS user account)
+        
         [Parameter(Mandatory = $true)]
-        [String]
+        [String[]]
         $RetainAdmin
     )
 
@@ -91,20 +98,27 @@ function Get-UnwantedLocalAdmins {
     $desiredLocalAdmins = New-Object System.Collections.Generic.List[System.Object]
     $builtInAdmin = Get-LocalUser | Where-Object { $_.Description -like "Built-in account for administering the computer/domain" }
     $desiredLocalAdmins.Add($builtInAdmin.Name)
-    $desiredLocalAdmins.Add($RetainAdmin)
+    foreach ( $admin in $RetainAdmin ) {
+        $desiredLocalAdmins.Add($admin)
+    }
 
     # Determine if there are additional local admins
     $localAdmins = Get-LocalAdmins
     $unwantedLocalAdmins = $localAdmins | Where-Object { 
-        $MemberWithoutDomain = $_.Split('\')[1]
-        $desiredLocalAdmins -notcontains $MemberWithoutDomain
+        if ( $_ -like "AzureAD\*" ) {
+            # Locate Entra ID/Azure AD accounts that are currently local admins but not in the desired admins list
+            $desiredLocalAdmins -notcontains $_
+        } else {
+            # Locate local admins that are not in the desired admins list
+            # Split is used to remove the prepended "HOSTNAME\" for easy comparison
+            $userWithoutDomain = $_.Split('\')[1]
+            $desiredLocalAdmins -notcontains $userWithoutDomain
+        }
+        
     }
     $unwantedLocalAdmins
 
 }
-
-# Local account used for Windows LAPS
-$RetainAdmin = "cloud_laps"
 
 # Logging
 $outputDirectory = "C:\Windows\System32\LogFiles\EndpointManager"
@@ -112,16 +126,13 @@ New-Folder -Path $OutputDirectory
 $logFile = "$OutputDirectory\LocalAdminMembership.log"
 
 # Execution
-$userExists = (Get-LocalUser).Name -Contains $RetainAdmin
-if ( $userExists ) {
-    $UnwantedLocalAdmins = Get-UnwantedLocalAdmins -RetainAdmin $RetainAdmin
-    if ($UnwantedLocalAdmins.Count -gt 0) {
-        Write-Log "[INFO] $retainAdmin is not the only local administrator. Initiating remediation" -LogFile $logFile
-        exit 1
-    } elseif ($UnwantedLocalAdmins.Count -eq 0) {
-        Write-Log "[INFO] $retainAdmin is the only local administrators. No remediation needed" -LogFile $logFile
-        exit 0
-    }
+$unwantedAdmins = Get-UnwantedLocalAdmins -RetainAdmin $RetainAdmin
+if ( $unwantedAdmins.Length -gt 0 ){
+    Write-Log "[INFO] Unwanted local admins found on machine. Initiating remediation" -LogFile $logFile
+    exit 1
+} elseif  ( $unwantedAdmins.Length -eq 0 ){
+    Write-Log "[INFO] No unwanted local admins found on machine. No remediation needed" -LogFile $logFile
+    exit 0
 } else {
-    Write-Log "[ERROR] Unable to locate user: $RetainAdmin. Remediation cannot proceed" -LogFile $logFile
+    Write-Log "[ERROR] Unable to determine if unwanted admins are present" -LogFile $logFile
 }
