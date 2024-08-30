@@ -163,7 +163,7 @@ function Invoke-GraphBatchRequest {
                 }
                 default {
                     # Log errors for unexpected status codes
-                    Write-Verbose "$timeStamp [ERROR] Request ID $($response.id)] failed with status code $($response.status). Error: $($response.body.error.code) $($response.body.error.message)"
+                    Write-Verbose "$timeStamp [ERROR] Request ID $($response.id) failed with status code $($response.status). Error: $($response.body.error.code) $($response.body.error.message)"
                     $errorList.Add([pscustomobject]@{
                             Id     = $response.id
                             Status = $response.status
