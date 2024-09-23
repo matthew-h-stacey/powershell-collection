@@ -93,20 +93,22 @@ function Get-EntraBypassGroupMembersBeta {
         # Retrieve named locations
         $namedLocations = Get-EntraNamedLocations
 
-        # Add all accounts with UPNs in any/all bypass groups to an empty list 
+        # Add all users in any/all bypass groups to an empty list 
         $allGroupMembers = [System.Collections.Generic.List[System.Object]]::new()
         $bypassgroups = Get-MgGroup -Search "displayName:bypass" -Sort "displayName" -CountVariable CountVar -ConsistencyLevel eventual 
         foreach ($bypassgroup in $bypassgroups) {
             $groupMembers = Get-MgGroupTransitiveMember  -GroupId $bypassgroup.Id -All
             foreach ($groupmember in $groupmembers) {
-                # If the member has a UPN, add it to allGroupMembers to try to find sign-in information
-                if ( $groupmembers.additionalproperties.userPrincipalName ) {
-                    $allGroupMembers.Add([PSCustomObject]@{
-                            Id                = $groupMember.Id
-                            DisplayName       = $groupMember.AdditionalProperties.displayName
-                            UserPrincipalName = $groupMember.AdditionalProperties.userPrincipalName
-                            BypassGroup       = $bypassgroup.DisplayName
-                        })
+                # If the user has a UPN, add it to allGroupMembers to try to find sign-in information
+                if ( $groupMember.AdditionalProperties.'@odata.type' -eq "#microsoft.graph.user") {
+                    if ( $groupmembers.additionalproperties.userPrincipalName ) {
+                        $allGroupMembers.Add([PSCustomObject]@{
+                                Id                = $groupMember.Id
+                                DisplayName       = $groupMember.AdditionalProperties.displayName
+                                UserPrincipalName = $groupMember.AdditionalProperties.userPrincipalName
+                                BypassGroup       = $bypassgroup.DisplayName
+                            })
+                    }
                 }
             }
         }
