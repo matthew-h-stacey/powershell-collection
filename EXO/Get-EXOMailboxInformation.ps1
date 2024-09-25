@@ -18,7 +18,7 @@ function Get-EXOMailboxInformation {
     param (
         [Parameter(Mandatory = $true, ParameterSetName = "Standard")]
         [string]
-        [ValidateSet("All", "ForwardingMailboxes", "SharedMailboxes")]
+        [ValidateSet("All", "ForwardingMailboxes", "SharedMailboxes", "UserMailboxes")]
         $Scope,
 
         [Parameter(Mandatory = $true, ParameterSetName = "Size-based")]
@@ -60,6 +60,9 @@ function Get-EXOMailboxInformation {
         }
         "SharedMailboxes" {
             $mailboxes = Get-EXOMailbox -Filter "RecipientTypeDetails -eq 'SharedMailbox'" -Properties $properties
+        }
+        "UserMailboxes" {
+            $mailboxes = Get-EXOMailbox -Filter "RecipientTypeDetails -eq 'UserMailbox'" -Properties $properties
         }
     }
     if ( $LargeMailboxesOnly ) {
