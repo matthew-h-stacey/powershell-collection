@@ -68,12 +68,8 @@ function New-EXOBarracudaRules {
     )
 
     if ( $ConfigureInboundConnector ) {
-        # Check to see if the SLC bypass rule already exists. If it does, skip. If it doesn't, create it        
-        try {
-            $ruleExists = Get-Transportrule -Identity "Barracuda spam bypass" -ErrorAction Stop
-        } catch {
-            $ruleExists = $false
-        }
+        # Check to see if the SCL bypass rule already exists. If it does, skip. If it doesn't, create it        
+        $ruleExists = Get-TransportRule -Filter "DescriptionAndName -like 'Barracuda spam bypass'"
         if ( $ruleExists ) {
             Write-Output "[INFO][TransportRule] SKIPPED: SCL bypass rule already present"
         } else {
@@ -86,7 +82,7 @@ function New-EXOBarracudaRules {
         }
         # Check to see if the inbound connector already exists. If it does, skip. If it doesn't, create it        
         try {
-            $connectorExists = Get-InboundConnector -Identity "Inbound from Barracuda" -ErrorAction Stop
+            $connectorExists = Get-InboundConnector -Identity "Inbound from Barracuda" -ErrorAction Stop -WarningAction Stop
         } catch {
             $connectorExists = $false
         }
