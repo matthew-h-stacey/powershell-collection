@@ -32,7 +32,7 @@ foreach ( $u in $users) {
 
     if ( $UserIdentifier -eq "mail") {
         $mail = $u.mail
-        $adUser = Get-ADUser -Filter { UserPrincipalName -eq $mail } -Properties $userProps
+        $adUser = Get-ADUser -Filter { Mail -eq $mail } -Properties $userProps
     }
 
     if (!$adUser) {
