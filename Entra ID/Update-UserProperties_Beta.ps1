@@ -12,21 +12,19 @@ Full file/folder path of the CSV
 
 .PARAMETER UserIdentifier
 This is the user identifier in the CSV file. 
-Typically, this should be UserPrincipalName or PrimarySmtpAddress, 
-which are used to locate users in Active Directory.
+Typically, this should be UserPrincipalName or PrimarySmtpAddress
 
 .PARAMETER ManagerIdentifier
-Optional parameter for cases when a Manager column is provided but the content is different from the user. 
-For example, the CSV may have UserPrincipalName for all users, 
-but the Manager column contains display names (e.g., "John Smith").
-This parameter allows the function to process manager information correctly.
+Optional parameter for cases when a Manager column is provided but the content is a different format from UserIdentifier. 
+For example, UserIdentifier may be UserPrincipalName but display names are used in the Manager column.
+In that case, ManagerIdentifier should be "DisplayName"
 
 .PARAMETER ExportPath
 Directory to export output to (ex: C:\TempPath)
 
 .PARAMETER OverrideBlankValue
 If this switch is used and there is a blank value in the provided CSV, it will overwrite the value of the user's property
-Use this switch to potentially clear values on the user object. Omit this switch to update cells with values, only
+Use this switch to clear values on the user object. Omit this switch to update cells with values, only
 
 .PARAMETER SkipBackup
 Skip the property backup. Useful if re-running this script and the backup was taken the first time the script ran
