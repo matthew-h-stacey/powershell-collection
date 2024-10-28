@@ -94,7 +94,7 @@ function Get-EntraBypassGroupMembersBeta {
         $namedLocations = Get-EntraNamedLocations
 
         # Add all users in any/all bypass groups to an empty list 
-        $allGroupMembers = [System.Collections.Generic.List[System.Object]]::new()
+        $allBypassMembers = [System.Collections.Generic.List[System.Object]]::new()
         $bypassgroups = Get-MgGroup -Search "displayName:bypass" -Sort "displayName" -CountVariable CountVar -ConsistencyLevel eventual 
         foreach ($bypassgroup in $bypassgroups) {
             $groupMembers = Get-MgGroupTransitiveMember  -GroupId $bypassgroup.Id -All
@@ -102,7 +102,7 @@ function Get-EntraBypassGroupMembersBeta {
                 # If the user has a UPN, add it to allGroupMembers to try to find sign-in information
                 if ( $groupMember.AdditionalProperties.'@odata.type' -eq "#microsoft.graph.user") {
                     if ( $groupmembers.additionalproperties.userPrincipalName ) {
-                        $allGroupMembers.Add([PSCustomObject]@{
+                        $allBypassMembers.Add([PSCustomObject]@{
                                 Id                = $groupMember.Id
                                 DisplayName       = $groupMember.AdditionalProperties.displayName
                                 UserPrincipalName = $groupMember.AdditionalProperties.userPrincipalName
@@ -112,20 +112,44 @@ function Get-EntraBypassGroupMembersBeta {
                 }
             }
         }
-        if ( $allGroupMembers ) {
-            # Batch - get all users with selected properties
-            $urlTemplate = "/users/{Id}?`$select=UserPrincipalName,AccountEnabled,AssignedLicenses,DisplayName,SignInActivity,Id"
-            $mgUserObjects = Invoke-GraphBatchRequest -InputObjects $allGroupMembers -ApiQuery $urlTemplate -Placeholder "Id" -Verbose
+        if ( $allBypassMembers ) {
+            # Get all users with selected properties. Use batching if there is more than one member
+            if ( $allBypassMembers.Count -gt 1) {
+                $urlTemplate = "/users/{Id}?`$select=UserPrincipalName,AccountEnabled,AssignedLicenses,DisplayName,SignInActivity,Id"
+                $bypassMembers = Invoke-GraphBatchRequest -InputObjects $allBypassMembers -ApiQuery $urlTemplate -Placeholder "Id" -Verbose
+            } else {
+                # The hash table conversion later expects a list. Retrieve the user and store in a list
+                $bypassMembers = [System.Collections.Generic.List[System.Object]]::new()
+                $uri = "https://graph.microsoft.com/v1.0/users/$($allBypassMembers.Id)" + '?$select=UserPrincipalName,AccountEnabled,AssignedLicenses,DisplayName,SignInActivity,Id'
+                $user = Invoke-MgGraphRequest -Method GET -Uri $uri
+                $bypassMembers.Add($user)
+            }
 
-            # Batch - get last sign-in for each user
-            $urlTemplate = "auditLogs/signins?`$filter=userPrincipalName eq '{UserPrincipalName}' and status/errorCode ne 0 and IsInteractive eq true&`$select=UserPrincipalName,createdDateTime,location,ipAddress,isInteractive,Id&`$top=1"
-            $mgAuditLogs = Invoke-GraphBatchRequest -InputObjects $allGroupMembers -ApiQuery $urlTemplate -Placeholder "UserPrincipalName" -Verbose
-            $mgAuditLogsFormatted = [System.Collections.Generic.List[System.Object]]::new()
-            $mgAuditLogs | ForEach-Object {
+            
+            # Get last sign-in for each user in the bypass groups. Use batching if there is more than one member
+            $bypassMembersWithSignIns = $bypassMembers | Where-Object { $_.SignInActivity -ne $null }
+            if ( $bypassMembersWithSignIns.Count -gt 1) {
+                $urlTemplate = "auditLogs/signins?`$filter=userId eq '{Id}' and status/errorCode eq 0 and IsInteractive eq true&`$select=UserPrincipalName,createdDateTime,location,ipAddress,isInteractive,Id&`$top=1"
+                $bypassMemberLogs = Invoke-GraphBatchRequest -InputObjects $bypassMembersWithSignIns -ApiQuery $urlTemplate -Placeholder "Id" -Verbose
+            } else {
+                # The hash table conversion later expects a list. Retrieve the sign-in logs and store in a List
+                $bypassMemberLogs = [System.Collections.Generic.List[System.Object]]::new()
+                $uri = "https://graph.microsoft.com/v1.0/auditLogs/signins?`$filter=userId eq '$($allBypassMembers.Id)' and status/errorCode eq 0 and IsInteractive eq true&`$select=UserPrincipalName,createdDateTime,location,ipAddress,isInteractive,Id&`$top=1"
+                $signInLogs = Invoke-MgGraphRequest -Method GET -Uri $uri
+                $bypassMemberLogs.Add($signInLogs)
+            }
+            $bypassMemberLogsFormatted = [System.Collections.Generic.List[System.Object]]::new()
+            $bypassMemberLogs | ForEach-Object {
                 if ( $_.value ) {
                     $_.value | ForEach-Object {
-                        $mgAuditLogsFormatted.Add([PSCustomObject]@{
-                                UserPrincipalName     = $_.userPrincipalName
+                        # Replace UPN with mail property for guest accounts
+                        $upn = if ( $_.userPrincipalName -like "*#EXT#*" ) {
+                            $_.mail
+                        } else {
+                            $_.userPrincipalName
+                        }
+                        $bypassMemberLogsFormatted.Add([PSCustomObject]@{
+                                UserPrincipalName     = $upn                                
                                 LastInteractiveSignin = $_.createdDateTime
                                 Location              = $_.Location
                                 IsInteractive         = $_.isInteractive
@@ -134,13 +158,12 @@ function Get-EntraBypassGroupMembersBeta {
                     }
                 }
             }
-
             # Convert the lists to a hash table, merge them, then convert back to a single list
-            if ( $mgUserObjects ) {
-                $h1 = ConvertTo-HashTable -List $mgUserObjects -KeyName UserPrincipalName
+            if ( $bypassMembers ) {
+                $h1 = ConvertTo-HashTable -List $bypassMembers -KeyName UserPrincipalName
             }
-            if ( $mgAuditLogsFormatted ) {
-                $h2 = ConvertTo-HashTable -List $mgAuditLogsFormatted -KeyName UserPrincipalName
+            if ( $bypassMemberLogsFormatted ) {
+                $h2 = ConvertTo-HashTable -List $bypassMemberLogsFormatted -KeyName UserPrincipalName
             } else {
                 $h2 = @{}
             }
@@ -150,7 +173,7 @@ function Get-EntraBypassGroupMembersBeta {
                 # Add the client name
                 $h3[$key] | Add-Member -MemberType NoteProperty -Name ClientName -Value $clientName -Force
                 # Add the bypass group(s)
-                $bypassGroups = ($allGroupMembers | Where-Object { $_.UserPrincipalName -eq $key } | Select-Object -ExpandProperty BypassGroup) -join ', '
+                $bypassGroups = ($allBypassMembers | Where-Object { $_.UserPrincipalName -eq $key } | Select-Object -ExpandProperty BypassGroup) -join ', '
                 $h3[$key] | Add-Member -MemberType NoteProperty -Name BypassGroups -Value $bypassGroups -Force
 
                 # Add named location or IP with country code
@@ -162,7 +185,10 @@ function Get-EntraBypassGroupMembersBeta {
                         $h3[$key] | Add-Member -MemberType NoteProperty -Name ReportedLocation -Value $location -Force
                     } else {
                         $countryCode = $h3[$key].Location.CountryOrRegion
-                        $h3[$key] | Add-Member -MemberType NoteProperty -Name ReportedLocation -Value "$publicIp ($countryCode)" -Force
+                        if ( $countryCode ) {
+                            $countryCode = "($countryCode)"
+                        }
+                        $h3[$key] | Add-Member -MemberType NoteProperty -Name ReportedLocation -Value "$publicIp $countryCode" -Force
                     }
                 }
                 # Format licenses
