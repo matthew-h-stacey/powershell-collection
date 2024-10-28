@@ -25,6 +25,7 @@ function Invoke-GraphBatchRequest {
     $graphResponse = Invoke-GraphBatchRequest -InputObjects $allGroupMembers -ApiQuery $urlTemplate -Placeholder "UserPrincipalName"
     
     #>
+    [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true)]
         [Object[]]
@@ -47,46 +48,73 @@ function Invoke-GraphBatchRequest {
     $requestCache = @{}
 
     # 20 is the current maximum size of batch jobs per Microsoft
-    $batchSize = 20
+    $batchSize = 10
 
     # Retry variables
-    $maxRetries = 5  # Maximum number of retry attempts
+    $maxRetries = 3  # Maximum number of retry attempts
     $initialDelay = 2 # Initial delay in seconds before the first retry
 
     # Start processing objects in InputObjects, creating batches of up to 20 Graph queries
+    Write-Verbose "Starting Graph batch processing"
     for ($i = 0; $i -lt $InputObjects.Count; $i += $batchSize) {
-        Write-Debug "Chunk: $i"
+        Write-Verbose "Chunk: $i"
         $end = $i + $batchSize - 1
         if ($end -ge $InputObjects.Count) {
             $end = $InputObjects.Count - 1
         }
         $index = $i
-        $graphBatchRequests = $InputObjects[$i..$end] | ForEach-Object {
-            # Replace the placeholder from the Url with the actual value
-            if ( $Placeholder) {
-                $propertyValue = $_.$Placeholder
-                $url = $ApiQuery -replace "\{$Placeholder\}", $propertyValue
-            } else {
-                $url = $ApiQuery
-            }
-            $request = [PSCustomobject]@{
-                'Id'     = ++$index
-                'Method' = 'GET'
-                'Url'    = $url
-            }
-            # Store the original request in the cache
-            $requestCache[$request.Id.ToString()] = $request
+        if ($i -eq $end) {
+            # there is only one entry sent to the back request
+            $graphBatchRequests = $InputObjects[$i] | ForEach-Object { 
+                if ( $Placeholder) {
+                    $propertyValue = $_.$Placeholder
+                    $url = $ApiQuery -replace "\{$Placeholder\}", $propertyValue
+                } else {
+                    $url = $ApiQuery
+                }
+                $request = [PSCustomobject]@{
+                    'Id'     = ++$index
+                    'Method' = 'GET'
+                    'Url'    = $url
+                }
+                # Store the original request in the cache
+                $requestCache[$request.Id.ToString()] = $request
 
-            # Return the request object to $graphBatchRequests
-            $request
-        }
+                # The batch payload expects an array. Return the single request as an array to $graphBatchRequests
+                $requestArray = @() 
+                $requestArray += $request
+                $requestArray
+            }
+            
+        } else {
+            # there are multiple entries sent to the batch request
+            $graphBatchRequests = $InputObjects[$i..$end] | ForEach-Object {
+                # Replace the placeholder from the Url with the actual value
+                if ( $Placeholder) {
+                    $propertyValue = $_.$Placeholder
+                    $url = $ApiQuery -replace "\{$Placeholder\}", $propertyValue
+                } else {
+                    $url = $ApiQuery
+                }
+                $request = [PSCustomobject]@{
+                    'Id'     = ++$index
+                    'Method' = 'GET'
+                    'Url'    = $url
+                }
+                # Store the original request in the cache
+                $requestCache[$request.Id.ToString()] = $request
+
+                # Return the request object to $graphBatchRequests
+                $request
+            }
+        }        
         # Construct and format the batch query as JSON
         $graphBatchParams = @{
             'Method'      = 'Post'
             'Uri'         = 'https://graph.microsoft.com/v1.0/$batch'
             'ContentType' = 'application/json'
             'Body'        = @{
-                'requests' = $graphBatchRequests
+                'requests' = [array]$graphBatchRequests
             } | ConvertTo-Json
         }
 
@@ -111,7 +139,7 @@ function Invoke-GraphBatchRequest {
                     Write-Verbose "$timeStamp [WARNING] Request ID $($response.id) was throttled. Retrying after $retryAfter seconds"
                     do {
                         Start-Sleep -Seconds $retryAfter
-                        Write-Verbose "$timeStamp [INFO] Request ID $($response.id)] - retrying request... (attempt $retryCount/$maxRetries)"
+                        Write-Verbose "$timeStamp [INFO] Request ID $($response.id) - retrying request... (attempt $retryCount/$maxRetries)"
 
                         # Retry the throttled request
                         $throttledRequest = @{
@@ -176,4 +204,3 @@ function Invoke-GraphBatchRequest {
     }
     return $outputList
 }
-
