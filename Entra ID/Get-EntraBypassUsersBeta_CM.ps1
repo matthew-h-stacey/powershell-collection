@@ -42,43 +42,6 @@ function Get-EntraBypassGroupMembersBeta {
         
     }
 
-    function Merge-HashTables {
-        # Function to merge two hash tables into one
-        param (
-            [Parameter(Mandatory = $true)]
-            [hashtable]
-            $First, 
-
-            [Parameter(Mandatory = $true)]
-            [hashtable]
-            $Second
-        )
-
-        # Store the merged results in this hash table
-        $mergedHashTable = @{}
-
-        # Copy the first hash table to the result
-        foreach ($key in $First.Keys) {
-            $mergedHashTable[$key] = $First[$key].PSObject.Copy()
-        }
-
-        # Merge the second hash table into the result
-        foreach ($key in $Second.Keys) {
-            if ($mergedHashTable.ContainsKey($key)) {
-                foreach ($property in $Second[$key].PSObject.Properties) {
-                    if (-not $mergedHashTable[$key].PSObject.Properties[$property.Name]) {
-                        $mergedHashTable[$key] | Add-Member -MemberType NoteProperty -Name $property.Name -Value $property.Value -Force
-                    } else {
-                        $mergedHashTable[$key].PSObject.Properties[$property.Name].Value = $property.Value
-                    }
-                }
-            } else {
-                $mergedHashTable[$key] = $Second[$key].PSObject.Copy()
-            }
-        }
-        return $mergedHashTable
-    }
-
     $htmlReportName = "Entra ID Bypass Group Membership Report"
     $htmlReportFooter = "Report created using SkyKick Cloud Manager"
     $skusMappingTable = Get-Microsoft365LicensesMappingTable
@@ -93,6 +56,7 @@ function Get-EntraBypassGroupMembersBeta {
         # Retrieve named locations
         $namedLocations = Get-EntraNamedLocations
 
+        # 1) Get all bypass users
         # Add all users in any/all bypass groups to an empty list 
         $allBypassMembers = [System.Collections.Generic.List[System.Object]]::new()
         $bypassgroups = Get-MgGroup -Search "displayName:bypass" -Sort "displayName" -CountVariable CountVar -ConsistencyLevel eventual 
@@ -112,29 +76,31 @@ function Get-EntraBypassGroupMembersBeta {
                 }
             }
         }
+
         if ( $allBypassMembers ) {
+
+            # 2) Get basic properties for each user
             # Get all users with selected properties. Use batching if there is more than one member
             if ( $allBypassMembers.Count -gt 1) {
-                $urlTemplate = "/users/{Id}?`$select=UserPrincipalName,AccountEnabled,AssignedLicenses,DisplayName,SignInActivity,Id"
+                $urlTemplate = "/users/{Id}?`$select=UserPrincipalName,AccountEnabled,AssignedLicenses,DisplayName,SignInActivity,Id,Mail"
                 $bypassMembers = Invoke-GraphBatchRequest -InputObjects $allBypassMembers -ApiQuery $urlTemplate -Placeholder "Id" -Verbose
             } else {
                 # The hash table conversion later expects a list. Retrieve the user and store in a list
                 $bypassMembers = [System.Collections.Generic.List[System.Object]]::new()
-                $uri = "https://graph.microsoft.com/v1.0/users/$($allBypassMembers.Id)" + '?$select=UserPrincipalName,AccountEnabled,AssignedLicenses,DisplayName,SignInActivity,Id'
+                $uri = "https://graph.microsoft.com/v1.0/users/$($allBypassMembers.Id)" + '?$select=UserPrincipalName,AccountEnabled,AssignedLicenses,DisplayName,SignInActivity,Id,Mail'
                 $user = Invoke-MgGraphRequest -Method GET -Uri $uri
                 $bypassMembers.Add($user)
             }
 
-            
-            # Get last sign-in for each user in the bypass groups. Use batching if there is more than one member
+            # 3) Get last sign-in info for each user. Use batching if there is more than one member
             $bypassMembersWithSignIns = $bypassMembers | Where-Object { $_.SignInActivity -ne $null }
-            if ( $bypassMembersWithSignIns.Count -gt 1) {
-                $urlTemplate = "auditLogs/signins?`$filter=userId eq '{Id}' and status/errorCode eq 0 and IsInteractive eq true&`$select=UserPrincipalName,createdDateTime,location,ipAddress,isInteractive,Id&`$top=1"
+            if ( ($bypassMembersWithSignIns | Select-Object Id -Unique).Count -gt 1) {
+                $urlTemplate = "auditLogs/signins?`$filter=userId eq '{Id}' and status/errorCode eq 0 and IsInteractive eq true&`$select=UserPrincipalName,createdDateTime,location,ipAddress,isInteractive,UserId&`$top=1"
                 $bypassMemberLogs = Invoke-GraphBatchRequest -InputObjects $bypassMembersWithSignIns -ApiQuery $urlTemplate -Placeholder "Id" -Verbose
             } else {
                 # The hash table conversion later expects a list. Retrieve the sign-in logs and store in a List
                 $bypassMemberLogs = [System.Collections.Generic.List[System.Object]]::new()
-                $uri = "https://graph.microsoft.com/v1.0/auditLogs/signins?`$filter=userId eq '$($allBypassMembers.Id)' and status/errorCode eq 0 and IsInteractive eq true&`$select=UserPrincipalName,createdDateTime,location,ipAddress,isInteractive,Id&`$top=1"
+                $uri = "https://graph.microsoft.com/v1.0/auditLogs/signins?`$filter=userId eq '$($allBypassMembers.Id)' and status/errorCode eq 0 and IsInteractive eq true&`$select=UserPrincipalName,createdDateTime,location,ipAddress,isInteractive,UserId&`$top=1"
                 $signInLogs = Invoke-MgGraphRequest -Method GET -Uri $uri
                 $bypassMemberLogs.Add($signInLogs)
             }
@@ -142,14 +108,9 @@ function Get-EntraBypassGroupMembersBeta {
             $bypassMemberLogs | ForEach-Object {
                 if ( $_.value ) {
                     $_.value | ForEach-Object {
-                        # Replace UPN with mail property for guest accounts
-                        $upn = if ( $_.userPrincipalName -like "*#EXT#*" ) {
-                            $_.mail
-                        } else {
-                            $_.userPrincipalName
-                        }
                         $bypassMemberLogsFormatted.Add([PSCustomObject]@{
-                                UserPrincipalName     = $upn                                
+                                Id                    = $_.UserId
+                                UserPrincipalName     = $_.userPrincipalName                           
                                 LastInteractiveSignin = $_.createdDateTime
                                 Location              = $_.Location
                                 IsInteractive         = $_.isInteractive
@@ -158,12 +119,13 @@ function Get-EntraBypassGroupMembersBeta {
                     }
                 }
             }
-            # Convert the lists to a hash table, merge them, then convert back to a single list
+
+            # 4) Combine the lists to a hash table, merge them, then convert back to a single list
             if ( $bypassMembers ) {
-                $h1 = ConvertTo-HashTable -List $bypassMembers -KeyName UserPrincipalName
+                $h1 = ConvertTo-HashTable -List $bypassMembers -KeyName Id
             }
             if ( $bypassMemberLogsFormatted ) {
-                $h2 = ConvertTo-HashTable -List $bypassMemberLogsFormatted -KeyName UserPrincipalName
+                $h2 = ConvertTo-HashTable -List $bypassMemberLogsFormatted -KeyName Id
             } else {
                 $h2 = @{}
             }
@@ -173,7 +135,7 @@ function Get-EntraBypassGroupMembersBeta {
                 # Add the client name
                 $h3[$key] | Add-Member -MemberType NoteProperty -Name ClientName -Value $clientName -Force
                 # Add the bypass group(s)
-                $bypassGroups = ($allBypassMembers | Where-Object { $_.UserPrincipalName -eq $key } | Select-Object -ExpandProperty BypassGroup) -join ', '
+                $bypassGroups = ($allBypassMembers | Where-Object { $_.Id -eq $key } | Select-Object -ExpandProperty BypassGroup) -join ', '
                 $h3[$key] | Add-Member -MemberType NoteProperty -Name BypassGroups -Value $bypassGroups -Force
 
                 # Add named location or IP with country code

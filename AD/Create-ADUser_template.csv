@@ -1,2 +1,3 @@
 ﻿FirstName,LastName,DisplayName,SamAccountName,UserPrincipalName,ChangePasswordAtLogon,Enabled,CopyUser,Email,Alias,Title,Department,Manager,Company,EmployeeID,StreetAddress,Office,City,State,postalCode,Country,Mobile,Fax,HomePhone,IpPhone,Pager,Description
-Able,Apple,Able Apple,aapple,aapple@bcservice.tech,TRUE,TRUE,,aapple@bcservice.tech,able@bcservice.tech,Sales Engineer,Sales,matt@bcservice.tech,Contoso,243,456 Baker Street,123,Anytown,CT,12345,US,774-548-7512,508-555-1234,555-444-1234,623-721-2176,751-7541-7243,Foosball expert
+Abigail,Johnson,Abigail Johnson,ajohnson,ajohnson@bcservice.tech,TRUE,TRUE,jsmith,abigail.johnson@bcservice.tech,abigail.gonzalez@bcservice.tech,HR Manager,Human Resources,,Contoso,4567,158 Whitestone Road,Seattle,FakeCity,CA,41234,US,508-555-7878,,,,,Test user
+Joseph,Black,Joseph Black,jblack,jblack@bcservice.tech,TRUE,TRUE,jsmith,jblack@bcservice.tech,,Warehouse Supervisor,Shipping,jsmith,,,,,,,,,,,,,,

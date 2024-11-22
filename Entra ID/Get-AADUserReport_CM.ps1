@@ -180,7 +180,8 @@ function Get-AADUserReport {
     }
 
     # Report variables
-    $ClientName = (Get-CustomerContext).CustomerName
+    $customerContext = Get-CustomerContext
+    $ClientName = $customerContext.CustomerName
     $ReportTitle = "$($ClientName) AzureAD User Report" 
     $ReportFooter = "Report created using SkyKick Cloud Manager"
 
@@ -195,6 +196,19 @@ function Get-AADUserReport {
         $allTeamsNumbers = Get-CsOnlineUser | Where-Object { $_.LineURI -notlike $null } | Select-Object DisplayName, UserPrincipalName, LineURI
     }
 
+    # All shared mailboxes
+    $sharedMailboxes = Get-EXOMailbox -ResultSize unlimited -Filter "RecipientTypeDetails -eq 'SharedMailbox'" $UPN
+
+    # Retrieve directory roles and membership
+    $allRoleMemberships = @()
+    Get-MgDirectoryRole | foreach-object {
+        $member = Get-MgDirectoryRoleMember -DirectoryRoleId $_.Id
+        $allRoleMemberships += [pscustomobject]@{
+            Role = $_.DisplayName
+            Member = @($member.AdditionalProperties.userPrincipalName)
+        }
+    }
+
     # Iterate through each user in the Graph output
     # Create a user hash table with basic properties and create a second hash table for all the other optional properties
     # Based on the options selected at runtime, add the selected optional properties to the original user hash table
@@ -202,7 +216,6 @@ function Get-AADUserReport {
     foreach ( $User in $MSGraphOutput) {
 
         $UPN = $User.UserPrincipalName
-        #$AADUser = Get-AzureADUser -ObjectId $UPN
 
         # Retrieve sign-in information
         if ($IncludeLastLogin) { 
@@ -224,15 +237,24 @@ function Get-AADUserReport {
         # Retrieve Teams number, if the user has one
         $TeamsNumber = $allTeamsNumbers | Where-Object { $_.UserPrincipalName -like $UPN } | Select-Object -ExpandProperty LineURI
 
+        # Check if the user account is a shared mailbox
+        if ($sharedMailboxes | where-object {$_.UserPrincipalName -like $UPN}) {
+            $isSharedMailbox = $true
+        } else {
+            $isSharedMailbox = $false
+        }
+
         $Source = if ( $User.onPremisesSyncEnabled -eq $True ) { "On-premises" } else { "Cloud only" }
 
         $userHashTable = [ordered]@{
             DisplayName                 =   $User.DisplayName
-            UPN                         =   $UPN
+            UserPrincipalName           =   $UPN
             Mail                        =   $User.Mail
             UserType                    =   $User.UserType
             AccountEnabled              =   $User.AccountEnabled
+            Roles                       =   $assignedRoles = ($allRoleMemberships | where-object { $_.Member -like $UPN } | sort-object | select-object -expandproperty role) -join ", "
             Source                      =   $Source
+            SharedMailbox               =   $isSharedMailbox
         }
         $optionalProperties = @(
             @{
@@ -253,7 +275,9 @@ function Get-AADUserReport {
             @{
                 Name = 'DaysSincePwChange'
                 Include = $IncludeDaysSincePwChange    	
-                Value = (New-TimeSpan -Start $User.LastPasswordChangeDateTime).Days
+                Value = if ( $User.LastPasswordChangeDateTime ) { 
+                    (New-TimeSpan -Start $User.LastPasswordChangeDateTime).Days
+                }  else { "N/A" }
             },
             @{
                 Name = 'Licenses'
@@ -308,7 +332,7 @@ function Get-AADUserReport {
                 Value = $User.Country
             },
             @{
-                Name = 'PhoneNumber'
+                Name = 'BusinessPhones'
                 Include = $IncludePhoneNumber      	
                 Value = $User.BusinessPhones
             },
@@ -328,8 +352,14 @@ function Get-AADUserReport {
 
     Out-SKSolutionReport -Content $results -ReportTitle $ReportTitle -ReportFooter $ReportFooter -SeparateReportFileForEachCustomer
 
+    # TESTING
+    <#
     if ( $IncludeM365LicenseReport ) {
         Get-M365LicenseReport
+    }
+    #>
+    if ( $IncludeM365LicenseReport ) {
+        Get-M365LicenseReportBeta -Clients $customerContext -Scope 'All'
     }
 
 
