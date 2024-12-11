@@ -58,26 +58,20 @@ function Test-EXOMailbox {
         $User
     )
 
-    # Adjust the filter based on the provided identity
+    # Construct the filter
     switch ( $PSCmdlet.ParameterSetName ) {
-        "DisplayName" { $filter = "DisplayName -like '" + $DisplayName + "'" }
-        "PrimarySmtpAddress" { $filter = "PrimarySmtpAddress -like '" + $PrimarySmtpAddress + "'"}
-        "UserPrincipalName" { $filter = "UserPrincipalName -like '" + $UserPrincipalName + "'" }
+        "DisplayName" { $filter = "DisplayName -eq '" + $DisplayName + "'" }
+        "PrimarySmtpAddress" { $filter = "PrimarySmtpAddress -eq '" + $PrimarySmtpAddress + "'"}
+        "UserPrincipalName" { $filter = "UserPrincipalName -eq '" + $UserPrincipalName + "'" }
     }
-
+    if ($Shared) {
+        $filter += " -and RecipientTypeDetails -eq 'SharedMailbox'"
+    } elseif ($User) {
+        $filter += " -and RecipientTypeDetails -eq 'UserMailbox'"
+    }
+    # Retrieve the mailbox
     $mailbox = Get-Mailbox -Filter $filter
 
-    # Selectively return the mailbox based on the usage or absense one of the switches
-    if ( $Shared ) {
-        if ( $mailbox.RecipientTypeDetails -eq "SharedMailbox") {
-            return $mailbox
-        }
-    } elseif ( $User ) {
-        if ( $mailbox.RecipientTypeDetails -eq "UserMailbox") {
-            return $mailbox
-        }
-    } else {
-        return $mailbox
-    }
+    return $mailbox
 
 }
