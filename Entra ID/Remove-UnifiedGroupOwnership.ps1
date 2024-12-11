@@ -28,6 +28,29 @@ function Remove-UnifiedGroupOwnership {
 
     }
 
+    function Add-TaskResult {
+        param(
+            [string]$Task,
+            [string]$Status,
+            [string]$Message,
+            [string]$ErrorMessage = $null,
+            [string]$Details = $null
+        )
+        $results.Add([PSCustomObject]@{
+                FunctionName = $function
+                Task         = $task
+                Status       = $Status
+                Message      = $Message
+                Details      = $Details
+                ErrorMessage = $ErrorMessage
+            })
+    }
+
+    # Initialize output variables
+    $function = $MyInvocation.MyCommand.Name
+    $task = "Remove Unified Group ownership"
+    $status = "Failure"
+    $results = [System.Collections.Generic.List[System.Object]]::new()
     $assignedOwnership = New-Object System.Collections.Generic.List[System.Object]
     $removedGroups = New-Object System.Collections.Generic.List[System.Object]
         
@@ -38,7 +61,6 @@ function Remove-UnifiedGroupOwnership {
         # Retrieve all groups
         $groupsResponse = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/beta/groups?filter=groupTypes/any(c:c+eq+'Unified')"
         $groups = $groupsResponse.Value
-
         try {
             $manager = Get-MgUser -UserId (Get-MgUserManager -UserId $UserPrincipalName -ErrorAction Stop).Id 
         } catch {
@@ -49,17 +71,17 @@ function Remove-UnifiedGroupOwnership {
         } else {
             $newOwner = $manager
         }
-
         foreach ( $group in $groups ) {
             $ownersResponse = Invoke-MgGraphRequest -Method GET -Uri ("https://graph.microsoft.com/v1.0/groups/" + $group.Id + "/owners")
             $owners = $ownersResponse.Value
-
             # process groups that the user has ownership of
             if ( $owners.UserPrincipalName -contains $UserPrincipalName ) {
                 # The user being offboarded is the only owner of the group. Ownership needs to be re-assigned
                 if ( $owners.length -eq 1 ) {
+                    $task = "Migrate sole group ownership to other user"
                     # Add new owner as a member (required)
                     $newOwnerId = $newOwner.Id
+                    # If the new owner is not yet a member of the group, add them as a member
                     if ( (Get-MgGroupMember -GroupId $group.Id).Id -notContains $newOwnerId ) {
                         try {
                             $params = @{
@@ -67,8 +89,9 @@ function Remove-UnifiedGroupOwnership {
                             }
                             New-MgGroupMemberByRef -GroupId $group.Id -BodyParameter $params
                         } catch {
-                            Write-Output "[UnifiedGroup ownership removal] Error occurred attempting to add $($newOwner.UserPrincipalName) to group: $($group.DisplayName). Error:"
-                            Write-Output $_.Exception.Message
+                            $message = "Error occurred attempting to add $($newOwner.UserPrincipalName) to group: $($group.DisplayName)"
+                            $errorMessage = $_.Exception.Message
+                            Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage
                         }
                     }
                     # Add new owner as an owner
@@ -79,31 +102,42 @@ function Remove-UnifiedGroupOwnership {
                         New-MgGroupOwnerByRef -GroupId $group.Id -BodyParameter $params
                         $assignedOwnership.Add($group.DisplayName)
                     } catch {
-                        Write-Output "[UnifiedGroup ownership removal] Error occurred attempting to grant $($newOwner.UserPrincipalName) ownership of group: $($group.DisplayName). Error:"
-                        Write-Output $_.Exception.Message
+                        $message = "Error occurred attempting to grant $($newOwner.UserPrincipalName) ownership of group: $($group.DisplayName)"
+                        $errorMessage = $_.Exception.Message
+                        Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage
                     }
-
                 }
                 # After a different user has been granted ownership, or if the group has other owners, remove the user's ownership
+                $task = "Remove Unified Group ownership"
                 try {
                     Remove-MgGroupOwnerByRef -GroupId $group.Id -DirectoryObjectId $user.Id
                     $removedGroups.Add($group.DisplayName)
                 } catch {
-                    Write-Output "[UnifiedGroup ownership removal] Error occurred attempting to remove $UserPrincipalName ownership of group: $($group.DisplayName). Error:"
-                    Write-Output $_.Exception.Message
+                    $message = "Error occurred attempting to remove $UserPrincipalName ownership of group: $($group.DisplayName)"
+                    $errorMessage = $_.Exception.Message
+                    Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage
                 }
             }
         }
-
-        $removedGroups = $removedGroups | Sort-Object
-        $assignedOwnership = $assignedOwnership | Sort-Object
-
         if ( $assignedOwnership ) {
-            Write-Output "[UnifiedGroup ownership removal] Granted $($newOwner.UserPrincipalName) ownership of Unified Group(s): $($assignedOwnership -join ", ")"
+            $assignedOwnershipString = ($assignedOwnership | Sort-Object) -join ", "
+            $status = "Success"
+            $message = "Granted $($newOwner.UserPrincipalName) ownership of Unified Group(s): $assignedOwnershipString"
+            $errorMessage = $null
+            Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage
         }
-        
         if ( $removedGroups ) {
-            Write-Output "[UnifiedGroup ownership removal] Removed ${UserPrincipalName}'s ownership of Unified Group(s): $($removedGroups -join ", ")"
+            $removedGroupsString = ($removedGroups | Sort-Object) -join ", "
+            $status = "Success"
+            $message = "Removed ${UserPrincipalName}'s ownership of Unified Group(s): $removedGroupsString"
+            $errorMessage = $null
+            Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage
         }
+    } else {
+        $status = "Skipped"
+        $message = "User not found: $UserPrincipalName"
+        Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage
     }
+    return $results
+    
 }

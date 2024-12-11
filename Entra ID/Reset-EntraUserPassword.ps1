@@ -1,10 +1,18 @@
+<#
+.SYNOPSIS
+Reset an Entra user's password
+
+.EXAMPLE
+Reset-EntraUserPassword -UserPrincipalName GradyA@5r86fn.onmicrosoft.com -Random:$true -Length 32 -ForceChangePasswordNextLogin:$false
+
+.NOTES
+[ ] Re-add the option to type a password
+
+#>
+
 function Reset-EntraUserPassword {
 
-    # Example:
-    # Reset-AADUserPassword -UserPrincipalName GradyA@5r86fn.onmicrosoft.com -Random:$true -Length 32 -ForceChangePasswordNextLogin:$false
-
-    param(
-    
+    param(    
         #
         [SkyKickParameter(
             DisplayName = "UserPrincipalName",
@@ -12,7 +20,8 @@ function Reset-EntraUserPassword {
         )]
         [Parameter(Mandatory = $true)]
         [ValidatePattern('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')]
-        [string] $UserPrincipalName,
+        [string]
+        $UserPrincipalName,
     
         #
         [SkyKickParameter(
@@ -20,7 +29,8 @@ function Reset-EntraUserPassword {
             HintText = "If enabled, the password will be reset to a randomly generated 32-character password."
         )]
         [Parameter(Mandatory = $False)]
-        [Boolean]$Random = $true,
+        [boolean]
+        $Random = $true,
         #
         [SkyKickConditionalVisibility({
 
@@ -33,15 +43,21 @@ function Reset-EntraUserPassword {
             DisplayName = "Password length",
             HintText = "Enter the desired length of the password to generate."
         )]
-        [Int]$Length,
+        [int]
+        $Length,
 
         #
         [SkyKickParameter(
             DisplayName = "ForceChangePasswordNextLogin",
-            HintText = "Require the password to be chnaged on next login."
+            HintText = "Require the password to be changed on next login."
         )]
         [Parameter(Mandatory = $true)]
-        [Boolean] $ForceChangePasswordNextLogin
+        [boolean]
+        $ForceChangePasswordNextLogin,
+
+        [Parameter(Mandatory = $true)]
+        [boolean]
+        $RevokeSessions
 
     )
     
@@ -58,6 +74,30 @@ function Reset-EntraUserPassword {
         return $password
     
     }
+
+    function Add-TaskResult {
+        param(
+            [string]$Task,
+            [string]$Status,
+            [string]$Message,
+            [string]$ErrorMessage = $null,
+            [string]$Details = $null
+        )
+        $results.Add([PSCustomObject]@{
+                FunctionName = $function
+                Task         = $Task
+                Status       = $Status
+                Message      = $Message
+                Details      = $Details
+                ErrorMessage = $ErrorMessage
+            })
+    }
+
+    # Initialize output variables
+    $function = $MyInvocation.MyCommand.Name
+    $task = "Reset user password"
+    $status = "Failure"
+    $results = [System.Collections.Generic.List[System.Object]]::new()
     
     $password = @{
         Password                      = (Get-RandomPassword -Length $Length)
@@ -65,10 +105,27 @@ function Reset-EntraUserPassword {
     }
     try {
         Update-MgUser -UserId $UserPrincipalName -PasswordProfile $password
-        Write-Output "[Password reset] $UserPrincipalName password successfully reset to a $($Length)-character randomly generated password."
+        $status = "Success"
+        $message = "$UserPrincipalName password successfully reset to a $($Length)-character randomly generated password."
     } catch {
-        Write-Output "[Password reset][Error] Failed to reset the password for user: $UserPrincipalName. Error:"
-        Write-Output $_.Exception.Message
+        $message = "Failed to reset the password for user: $UserPrincipalName"
+        $errorMessage = $_.Exception.Message
+    }
+    Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage -Details $details
+    if ( $RevokeSessions ) {
+        try {
+            Revoke-MgUserSignInSession -UserId $UserPrincipalName | Out-Null
+            $task = "Revoke sessions"
+            $status = "Success"
+            $message = "Revoked user sessions for $UserPrincipalName"
+        } catch {
+            $status = "Failure"
+            $message = "Error occurred attempting to revoke sessions for $UserPrincipalName"
+            $errorMessage = $_.Exception.Message
+        }
+        Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage -Details $details
     }
 
+    # Output
+    return $results
 }

@@ -32,58 +32,76 @@ function Set-EXOMailboxForwarding {
         
     )
 
-    $status = "Failure"
-    $message = $null
-    $errorMessage = $null
-    $details = $null
+    # Helper function
+    function Add-TaskResult {
+        param(
+            [string]$Task,
+            [string]$Status,
+            [string]$Message,
+            [string]$ErrorMessage = $null,
+            [string]$Details = $null
+        )
+        $results.Add([PSCustomObject]@{
+                FunctionName = $function
+                Task         = $Task
+                Status       = $Status
+                Message      = $Message
+                Details      = $Details
+                ErrorMessage = $ErrorMessage
+            })
+    }
 
-    # Switch to set $DeliverToMailboxAndForward based on $DeliveryType
+    # Initialize output variables
+    $function = $MyInvocation.MyCommand.Name
+    $task = "Set mailbox forwarding"
+    $status = "Failure"
+    $results = [System.Collections.Generic.List[System.Object]]::new()
+
+    # Switch to set $DeliverToMailboxAndForward and $mailAction (string for output) based on $DeliveryType
     switch ( $DeliveryType ) {
         "Forwarding" { 
             $DeliverToMailboxAndForward = $true
-            $MailAction = "forward"
+            $mailAction = "forward"
         }
         "Redirection" {
             $DeliverToMailboxAndForward = $false
-            $MailAction = "redirect"
+            $mailAction = "redirect"
         }
-    }
-
-    # Check for the mailbox before proceeding
-    if ( !(Test-EXOMailbox -UserPrincipalName $Identity) ) {
-        return "[Email $DeliveryType] Skipped, no mailbox found for $Identity"
     }
 
     # Configure mailbox forwarding/redirection based on recipient location
-    # The difference here is in the parameter ForwardingAddress vs. ForwardingSMTPAddress
-
-    switch ( $RecipientLocation ) {
-        "Internal" { 
-            try {
-                Set-Mailbox -Identity $Identity -DeliverToMailboxAndForward $DeliverToMailboxAndForward -ForwardingAddress $Recipient
-                #Write-Output "[Email $DeliveryType] Set email to $MailAction from $Identity to $Recipient."
-            } catch {
-                #Write-Output "[Email $DeliveryType] Failed to $MailAction email from $Identity to $Recipient. Error:"
-                $_.Exception.Message
+    # The difference is in the parameter ForwardingAddress vs. ForwardingSMTPAddress
+    $mailbox = Test-EXOMailbox -UserPrincipalName $UserPrincipalName
+    if ( $mailbox ) {
+        switch ( $RecipientLocation ) {
+            "Internal" { 
+                try {
+                    Set-Mailbox -Identity $Identity -DeliverToMailboxAndForward $DeliverToMailboxAndForward -ForwardingAddress $Recipient
+                    $status = "Success"
+                    $message = "Set email to $mailAction from $Identity to $Recipient"
+                } catch {
+                    $message = "Failed to $mailAction email from $Identity to $Recipient"
+                    $errorMessage = $_.Exception.Message
+                }
+            }
+            "External" {
+                try {
+                    Set-Mailbox -Identity $Identity -DeliverToMailboxAndForward $DeliverToMailboxAndForward -ForwardingAddress $null -ForwardingSMTPAddress $Recipient
+                    $status = "Success"
+                    $message = "Set email to $mailAction from $Identity to $Recipient"
+                } catch {
+                    $message = "Failed to $mailAction email from $Identity to $Recipient"
+                    $errorMessage = $_.Exception.Message
+                }
             }
         }
-        "External" {
-            try {
-                Set-Mailbox -Identity $Identity -DeliverToMailboxAndForward $DeliverToMailboxAndForward -ForwardingAddress $null -ForwardingSMTPAddress $Recipient
-                #Write-Output "[Email $DeliveryType] Set email to $MailAction from $Identity to $Recipient."
-            } catch {
-                #Write-Output "[Email $DeliveryType] Failed to $MailAction from $Identity to $Recipient. Error:"
-                $_.Exception.Message
-            }
-        }
+    } else {
+        $status = "Skipped"
+        $message = "No mailbox found for: $Identity"
     }
 
-    return [PSCustomObject]@{
-        FunctionName = $MyInvocation.MyCommand.Name
-        Status       = $status
-        Message      = $message
-        ErrorMessage = $errorMessage
-        Details      = $details
-    }
+    # Output
+    Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage
+    return $results	
 	
 }
