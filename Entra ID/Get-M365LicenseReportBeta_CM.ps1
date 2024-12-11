@@ -18,7 +18,7 @@ function Get-M365LicenseReportBeta {
             DisplayOrder = 1
         )]
         [Parameter (Mandatory = $true)]
-        [ValidateSet("All", "ExpiringSoonOnly")]
+        [ValidateSet("All", "ActiveOnly", "ExpiringSoonOnly")]
         [String]
         $Scope,
 
@@ -131,6 +131,16 @@ function Get-M365LicenseReportBeta {
                         }
                     } else {
                         # Otherwise, just add everything
+                        $results.Add($licenseOutput)
+                    }
+                }
+                "ActiveOnly" {
+                    # If 'UnderallocatedSKUsOnly' is true, only add when 'AvailableLicenses' is greater than 0
+                    if ($UnderallocatedSKUsOnly) {
+                        if ($licenseOutput.AvailableLicenses -gt 0 -and $licenseOutput.Status -eq "Enabled") {
+                            $results.Add($licenseOutput)
+                        }
+                    } elseif ( $licenseOutput.Status -eq "Enabled" ) {
                         $results.Add($licenseOutput)
                     }
                 }
