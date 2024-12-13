@@ -5,7 +5,8 @@ function Set-EXOMailboxForwarding {
             DisplayName = "Email address/UserPrincipalName of the mailbox to set forwarding on"
         )]
         [Parameter(Mandatory = $true)]
-        [String]$Identity,
+        [String]
+        $Identity,
 
         [SkyKickParameter(
             DisplayName = "Recipient location",
@@ -13,14 +14,16 @@ function Set-EXOMailboxForwarding {
         )]
         [Parameter(Mandatory = $true)]
         [ValidateSet("Internal", "External")]
-        [String]$RecipientLocation,
+        [String]
+        $RecipientLocation,
 
         [SkyKickParameter(
             DisplayName = "Recipient email address",
             HintText = "Enter the email address of the recipient emails will be forwarded to."
         )]
         [Parameter(Mandatory = $true)]
-        [String]$Recipient,
+        [String]
+        $Recipient,
 
         [SkyKickParameter(
             DisplayName = "Forward or redirect email?",
@@ -28,7 +31,8 @@ function Set-EXOMailboxForwarding {
         )]
         [Parameter(Mandatory = $true)]
         [ValidateSet("Forwarding", "Redirection")]
-        [String]$DeliveryType
+        [String]
+        $DeliveryType
         
     )
 
@@ -71,7 +75,7 @@ function Set-EXOMailboxForwarding {
 
     # Configure mailbox forwarding/redirection based on recipient location
     # The difference is in the parameter ForwardingAddress vs. ForwardingSMTPAddress
-    $mailbox = Test-EXOMailbox -UserPrincipalName $UserPrincipalName
+    $mailbox = Test-EXOMailbox -UserPrincipalName $Identity
     if ( $mailbox ) {
         switch ( $RecipientLocation ) {
             "Internal" { 
