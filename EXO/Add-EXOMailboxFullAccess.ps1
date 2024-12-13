@@ -33,13 +33,13 @@ function Add-EXOMailboxFullAccess {
             [string]$Details = $null
         )
         $results.Add([PSCustomObject]@{
-            FunctionName = $function
-            Task     = $Task
-            Status       = $Status
-            Message      = $Message
-            Details       = $Details
-            ErrorMessage = $ErrorMessage
-        })
+                FunctionName = $function
+                Task         = $Task
+                Status       = $Status
+                Message      = $Message
+                Details      = $Details
+                ErrorMessage = $ErrorMessage
+            })
     }
 
     # Initialize output variables
@@ -58,7 +58,7 @@ function Add-EXOMailboxFullAccess {
                 try {
                     Add-MailboxPermission -Identity $UserPrincipalName -User $Trustee -AccessRights FullAccess -AutoMapping $AutoMapping | Out-Null
                     $status = "Success"
-                    $message = "[Mailbox access] Granted $Trustee access to $UserPrincipalName's mailbox"
+                    $message = "Granted $Trustee access to $UserPrincipalName's mailbox"
                     $errorMessage = $null
                 } catch {
                     $status = "Failure"
