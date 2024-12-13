@@ -36,7 +36,7 @@ function Clear-EntraUserMultifactorMethods {
             $status = "Success"
             $message = "Removed user MFA method: email"
             $errorMessage = $null
-            $Details = $_
+            $Details = $_.EmailAddress
             Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage -Details $details
         }
         catch {
@@ -51,7 +51,7 @@ function Clear-EntraUserMultifactorMethods {
             $status = "Success"
             $message = "Removed user MFA method: phone number"
             $errorMessage = $null
-            $Details = $_
+            $Details = $_.PhoneNumber
             Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage -Details $details
         } catch {
             $message = "Failed to remove one or more user MFA authentication methods (phone)"
@@ -65,7 +65,7 @@ function Clear-EntraUserMultifactorMethods {
             $status = "Success"
             $message = "Removed user MFA method: Microsoft MFA"
             $errorMessage = $null
-            $Details = $_
+            $Details = $_.DisplayName
             Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage -Details $details
         } catch {
             $message = "Failed to remove one or more user MFA authentication methods (Microsoft MFA)"
