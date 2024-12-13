@@ -37,7 +37,7 @@ function Clear-EntraUserProperties {
     $results = [System.Collections.Generic.List[System.Object]]::new()
 
     $userIdentifiers = @("UserPrincipalName", "Id")
-    $propsToClear = @("JobTitle", "CompanyName", "Department", "StreetAddress", "City", "State", "PostalCode", "OfficeLocation", "MobilePhone", "Manager", "BusinessPhones")
+    $propsToClear = @("JobTitle", "CompanyName", "Department", "StreetAddress", "City", "State", "PostalCode", "OfficeLocation", "MobilePhone", "Manager")
     $userProps = $userIdentifiers + $propsToClear
     $clearedProperties = @{}
 
@@ -63,9 +63,11 @@ function Clear-EntraUserProperties {
                     }
                 }
             } elseif ( $user.$prop  ) {
-                try {             
+                try {
+                    # Multi-value strings need to be passed as an empty array. Regular strings can be set to null                 
                     Invoke-MgGraphRequest -Method PATCH -Uri "https://graph.microsoft.com/v1.0/Users/$($user.Id)" -Body @{$prop = $null }
                     $clearedProperties.Add($Prop, $user.$Prop)
+                    $errorMessage = $null
                 } catch {
                     $message = "Failed to clear value of property: $prop"
                     $errorMessage = $_.Exception.Message
@@ -73,8 +75,8 @@ function Clear-EntraUserProperties {
                 }
             }
         }
-        if ( $clearedProperties ) {
-            $message = "Successfully cleared Entra user properties"
+        if ( $clearedProperties.Count -gt 1 ) {
+            $message = "Successfully cleared Entra user properties. See Details"
             $formattedDetails = ($clearedProperties.GetEnumerator() | ForEach-Object {
                     "$($_.Key): $($_.Value)"
                 }) -join "`n"
