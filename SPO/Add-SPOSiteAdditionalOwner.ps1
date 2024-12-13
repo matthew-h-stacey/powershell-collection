@@ -34,19 +34,18 @@ function Add-SPOSiteAdditionalOwner {
     $task = "Grant access to OneDrive personal site"
     $status = "Failure"
     $results = [System.Collections.Generic.List[System.Object]]::new()
-
-    try {
-        $SPOSiteUrl  = Get-SPOSite -Filter { Url -like "/personal/" } -IncludePersonalSite $true | Where-Object{$_.Owner -like $UserPrincipalName} | Select-Object -ExpandProperty Url
+    
+    $spoSiteUrl = Get-SPOSite -Filter "Owner -like $UserPrincipalName -and Url -like '/personal'" -IncludePersonalSite $true
+    if ( $spoSiteUrl ) {
         try {
-            Set-SPOUser -Site $SPOSiteUrl -LoginName $OneDriveTrustee -IsSiteCollectionAdmin $true | Out-Null
+            Set-SPOUser -Site $spoSiteUrl -LoginName $OneDriveTrustee -IsSiteCollectionAdmin $true | Out-Null
             $status = "Success"
             $message = "Granted $OneDriveTrustee access to $UserPrincipalName's OneDrive"
         } catch {
             $message = "Failed to grant $OneDriveTrustee access to $UserPrincipalName's OneDrive"
             $errorMessage = $_.Exception.Message
         }
-    }
-    catch {
+    } else {
         $message = "Failed to locate a OneDrive URL for $UserPrincipalName. Unable to grant $OneDriveTrustee access"
         $errorMessage = $_.Exception.Message
     }
