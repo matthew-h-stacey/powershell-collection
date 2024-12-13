@@ -1,44 +1,26 @@
 <#
-.SYNOPSIS
-Perform steps necessary to offboard an Entra ID user account
+[Mandatory]
+Reset the password
+Revoke user sessions
+Remove any assigned licenses
+Re-assign any Unified Groups owned by the user to their manager (or a Global Admin)
+Remove the user from any Unified Groups
+Remove the user from any distribution groups
+Hide the user from the GAL
+Clear data from mobile devices
+Remove user from Azure AD groups
+Clear out values of Azure AD user properties that may include them in dynamic groups
+Clear MFA methods
+Disable the account
 
-.NOTES
-To do:
-[ ] Troubleshoot script failure on aapple@bcservice.tech
-
-Functions:
-1) Mandatory
-[X] Reset the password
-[X] Convert the account to a shared mailbox
-[X] Remove any assigned licenses
-[X] Re-assign any Unified Groups owned by the user to their manager (or a Global Admin)
-[X] Remove the user from any Unified Groups
-[X] Remove the user from any distribution groups
-[X] Hide the user from the GAL
-[X] Clear data from mobile devices
-[X] Remove user from Azure AD groups
-[X] Clear out values of Azure AD user properties that may include them in dynamic groups
-[X] Clear MFA methods
-
-2) Optional
-[X] Forward email
-[X] Mailbox delegation
-[X] OneDrive delegation
-
-Data variables:
-$UserPrincipalName
-$ForwardingAddress
-$MailboxTrustee
-$OneDriveTrustee
-
-Booleans:
-$ForwardEmail
-$GrantMailboxAccess
-$GrantOneDriveAccess
-
+[Optional]
+Convert the account to a shared mailbox
+Forward email
+Mailbox delegation
+OneDrive delegation
 #>
 
-function Revoke-AADUserAccess {
+function Revoke-EntraUserAccess {
 
     [SkyKickCommand(DisplayName = "Set Parameter Sections", Sections = { "Confirmation", "User", "Options" })]
     param(
@@ -58,17 +40,17 @@ function Revoke-AADUserAccess {
                 param ($CommandName, $ParameterName, $WordToComplete, $CommandAst, $FakeBoundParameters)
 
                 # Getting all active users for the argument completer
-                $Params = @{
+                $params = @{
                     Top      = 30
                     Property = @("UserPrincipalName", "Id")
                 }
                 if ($WordToComplete) {
-                    $Params += @{
+                    $params += @{
                         Filter = "startsWith(UserPrincipalName, '$WordToComplete')"
                     }
                 }
 
-                Get-MgUser @Params
+                Get-MgUser @params
                 | Sort-Object -Property UserPrincipalName
                 | ForEach-Object {
                     New-SkyKickCompletionResult -Value $_.UserPrincipalName -DisplayName $_.UserPrincipalName
@@ -87,9 +69,18 @@ function Revoke-AADUserAccess {
         [Parameter(Mandatory = $false)]
         [Boolean]
         [SkyKickParameter(
-            DisplayName = "Forward emails?",
+            DisplayName = "Convert to shared mailbox?",
             Section = "Options",
             DisplayOrder = 1
+        )]
+        $SharedMailbox = $false,
+
+        [Parameter(Mandatory = $false)]
+        [Boolean]
+        [SkyKickParameter(
+            DisplayName = "Forward emails?",
+            Section = "Options",
+            DisplayOrder = 2
         )]
         $ForwardEmail = $false,
 
@@ -112,7 +103,7 @@ function Revoke-AADUserAccess {
             DisplayName = "Forwarding address",
             Section = "Options",
             HintText = "Enter an address to forward emails to.",
-            DisplayOrder = 2
+            DisplayOrder = 3
         )]
         [string] $ForwardingAddress,
 
@@ -122,7 +113,7 @@ function Revoke-AADUserAccess {
         [SkyKickParameter(
             DisplayName = "Grant another user access to the ex-employee's inbox/calendar/contacts?",
             Section = "Options",
-            DisplayOrder = 3
+            DisplayOrder = 4
         )]
         [Boolean]
         $GrantMailboxAccess = $false,
@@ -139,17 +130,17 @@ function Revoke-AADUserAccess {
                 param ($CommandName, $ParameterName, $WordToComplete, $CommandAst, $FakeBoundParameters)
 
                 # Getting all active users for the argument completer
-                $Params = @{
+                $params = @{
                     Top      = 30
                     Property = @("UserPrincipalName", "Id")
                 }
                 if ($WordToComplete) {
-                    $Params += @{
+                    $params += @{
                         Filter = "startsWith(UserPrincipalName, '$WordToComplete')"
                     }
                 }
 
-                Get-MgUser @Params
+                Get-MgUser @params
                 | Sort-Object -Property UserPrincipalName
                 | ForEach-Object {
                     New-SkyKickCompletionResult -Value $_.UserPrincipalName -DisplayName $_.UserPrincipalName
@@ -158,7 +149,7 @@ function Revoke-AADUserAccess {
         [SkyKickParameter(
             DisplayName = "Trustee: Mailbox",
             Section = "Options",
-            DisplayOrder = 4,
+            DisplayOrder = 5,
             HintText = "Enter the user who should be granted access to the ex-employee's mailbox (inbox, calendar, contacts)."
         )]
         [String]$MailboxTrustee,
@@ -169,7 +160,7 @@ function Revoke-AADUserAccess {
         [SkyKickParameter(
             DisplayName = "Grant another user access to the ex-employee's OneDrive?",
             Section = "Options",
-            DisplayOrder = 9
+            DisplayOrder = 6
         )]
         [Boolean]
         $GrantOneDriveAccess = $false,
@@ -186,17 +177,17 @@ function Revoke-AADUserAccess {
                 param ($CommandName, $ParameterName, $WordToComplete, $CommandAst, $FakeBoundParameters)
 
                 # Getting all active users for the argument completer
-                $Params = @{
+                $params = @{
                     Top      = 30
                     Property = @("UserPrincipalName", "Id")
                 }
                 if ($WordToComplete) {
-                    $Params += @{
+                    $params += @{
                         Filter = "startsWith(UserPrincipalName, '$WordToComplete')"
                     }
                 }
 
-                Get-MgUser @Params
+                Get-MgUser @params
                 | Sort-Object -Property UserPrincipalName
                 | ForEach-Object {
                     New-SkyKickCompletionResult -Value $_.UserPrincipalName -DisplayName $_.UserPrincipalName
@@ -206,7 +197,7 @@ function Revoke-AADUserAccess {
             DisplayName = "Trustee: OneDrive",
             HintText = "Enter the user who should be granted access to the ex-employee's OneDrive.",
             Section = "Options",
-            DisplayOrder = 10
+            DisplayOrder = 7
         )]
         [String]$OneDriveTrustee
 
@@ -214,58 +205,87 @@ function Revoke-AADUserAccess {
 
     )
 
-    
+    function Add-Results {
+        <#
+        .SYNOPSIS
+        Quick helper function to add results from the related functions. Supports flattening from functions that return multiple values
 
-    if ( $UserConfirmation -like "Yes" ) {
+        .PARAMETER FinalResults
+        The list that results should be flattened into
 
-        ### Mandatory items ###
-        
-        # Reset user password
-        Reset-AADUserPassword -UserPrincipalName $UserPrincipalName -Random:$True -Length 32 -ForceChangePasswordNextLogin:$True
+        .PARAMETER TaskResults
+        Results from an individual function to flatten into FinalResults
 
-        # Convert to shared mailbox
-        Convert-EXOMailboxToShared -UserPrincipalName $UserPrincipalName
+        #>
 
-        #Remove user licenses
-        Remove-M365UserLicenses -UserPrincipalName $UserPrincipalName
-
-        # Remove ownership from any Unified Groups, reassign to manager or a global admin
-        Remove-UnifiedGroupOwnership -UserPrincipalName $UserPrincipalName
-
-        # Remove user from Unified Groups
-        Remove-UnifiedGroupMembership -UserPrincipalName $UserPrincipalName
-        
-        # Remove user from distribution groups
-        Remove-EXODistributionGroupMembership -UserPrincipalName $UserPrincipalName
-    
-        # Hide the mailbox from the GAL
-        Set-EXOMailboxGALVisibility -UserPrincipalName $UserPrincipalName -Hidden:$True
-
-        # Clear data from mobile devices
-        Clear-EXOMailboxMobileData -UserPrincipalName $UserPrincipalName
-
-        # Remove user from Azure AD groups
-        Remove-AADUserGroupMembership -UserPrincipalName $UserPrincipalName
-
-        # Clear out values of Azure AD user properties that may include them in dynamic groups
-        Clear-AADUserProperties -UserPrincipalName $UserPrincipalName
-
-        # Clear out MFA methods
-        Clear-AADUserMFAMethods -UserPrincipalName $UserPrincipalName
-
-        ### Optional items ###
-
-        if ( $ForwardEmail ) {
-            Set-EXOMailboxForwarding -Identity $UserPrincipalName -Recipient $ForwardingAddress -RecipientLocation Internal -DeliveryType Forwarding  
-        }
-        if ( $GrantMailboxAccess ) {
-            Add-EXOMailboxFullAccess -UserPrincipalName $UserPrincipalName -Trustee $MailboxTrustee -AutoMapping:$True
-        }
-        if ( $GrantOneDriveAccess ) {
-            Add-SPOSiteAdditionalOwner -UserPrincipalName $UserPrincipalName -OneDriveTrustee $OneDriveTrustee
+        param (
+            [System.Collections.Generic.List[System.Object]]$FinalResults, # Aggregated results
+            [array]$TaskResults # Output from a function to be added
+        )
+        foreach ($result in $TaskResults) {
+            $FinalResults.Add($result)
         }
     }
-    else {
+
+    $results = [System.Collections.Generic.List[System.Object]]::new()
+    $htmlReportName = "Entra ID user offboard report: $UserPrincipalName"
+    $htmlReportFooter = "Report created using SkyKick Cloud Manager"
+    $reportParams = @{
+        IncludePartnerLogo = $true
+        ReportTitle        = $htmlReportName
+        ReportFooter       = $htmlReportFooter
+        OutTo              = "NewTab"
+    }
+
+    if ( $UserConfirmation -like "Yes" ) {
+        $hasMailbox = Test-EXOMailbox -UserPrincipalName $UserPrincipalName
+        ### Optional items ###
+        if ( $hasMailbox ) {
+            # Convert to shared mailbox
+            if ( $SharedMailbox ) {
+                Add-Results -FinalResults $results -TaskResults (Convert-EXOMailboxToShared -UserPrincipalName $UserPrincipalName)
+            }
+            if ( $ForwardEmail ) {
+                Add-Results -FinalResults $results -TaskResults (Set-EXOMailboxForwarding -Identity $UserPrincipalName -Recipient $ForwardingAddress -RecipientLocation Internal -DeliveryType Forwarding)
+            }
+            if ( $GrantMailboxAccess ) {
+                Add-Results -FinalResults $results -TaskResults  (Add-EXOMailboxFullAccess -UserPrincipalName $UserPrincipalName -Trustee $MailboxTrustee -AutoMapping:$True)
+            }
+            if ( $GrantOneDriveAccess ) {
+                Add-Results -FinalResults $results -TaskResults  (Add-SPOSiteAdditionalOwner -UserPrincipalName $UserPrincipalName -OneDriveTrustee $OneDriveTrustee)
+            }
+        }
+        ### Mandatory items ###
+        # Reset user password and revoke sessions
+        Add-Results -FinalResults $results -TaskResults  (Reset-EntraUserPassword -UserPrincipalName $UserPrincipalName -Random:$True -Length 32 -ForceChangePasswordNextLogin:$True -RevokeSessions:$true)
+        # Clear MFA methods
+        Add-Results -FinalResults $results -TaskResults  (Clear-EntraUserMultifactorMethods -UserPrincipalName $UserPrincipalName)
+        # Remove user licenses
+        Add-Results -FinalResults $results -TaskResults  (Remove-EntraUserAssignedLicenses -UserPrincipalName $UserPrincipalName)
+        # Remove user from Unified Groups
+        Add-Results -FinalResults $results -TaskResults  (Remove-UnifiedGroupMembership -UserPrincipalName $UserPrincipalName)
+        if ( $hasMailbox ) {
+            # Remove ownership from any Unified Groups, reassign to manager or a global admin
+            Add-Results -FinalResults $results -TaskResults  (Remove-UnifiedGroupOwnership -UserPrincipalName $UserPrincipalName)
+            # Remove user from distribution groups
+            Add-Results -FinalResults $results -TaskResults  (Remove-EXODistributionGroupMembership -UserPrincipalName $UserPrincipalName)
+            # Hide the mailbox from the GAL
+            Add-Results -FinalResults $results -TaskResults  (Set-EXOMailboxGALVisibility -UserPrincipalName $UserPrincipalName -Hidden:$True)
+            # Clear data from mobile devices
+            Add-Results -FinalResults $results -TaskResults  (Clear-EXOMailboxMobileData -UserPrincipalName $UserPrincipalName)
+        }
+        # Remove user from Entra ID security groups
+        Add-Results -FinalResults $results -TaskResults  (Remove-EntraUserGroupMembership -UserPrincipalName $UserPrincipalName)
+        # Clear out values of Azure AD user properties that may include them in dynamic groups
+        Add-Results -FinalResults $results -TaskResults  (Clear-EntraUserProperties -UserPrincipalName $UserPrincipalName)
+        # Disable account
+        Add-Results -FinalResults $results -TaskResults  (Disable-EntraUserAccount -UserPrincipalName $UserPrincipalName)
+        
+        # Output
+        if ( $results ) {
+            $results | Select-Object Status,Task,Message,Details,ErrorMessage,FunctionName | Out-SkyKickTableToHtmlReport @reportParams
+        }
+    } else {
         quit
     }
 	
