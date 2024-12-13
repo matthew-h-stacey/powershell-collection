@@ -52,6 +52,7 @@ function Clear-EntraUserProperties {
                 } else {
                     try {
                         Remove-MgUserManagerByRef -UserId $user.Id
+                        $task = "Clear Entra user manager"
                         $status = "Success"
                         $message = "Unassigned manager: $($manager.displayName)"
                         $errorMessage = $null
