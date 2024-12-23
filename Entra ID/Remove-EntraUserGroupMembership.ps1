@@ -63,7 +63,7 @@ function Remove-EntraUserGroupMembership {
             $removedGroupsString = ($removedGroups | Sort-Object) -join ', '
             $status = "Success"
             $message = "Removed $UserPrincipalName from Entra ID group(s): $removedGroupsString"
-            $errorMessage = "null"
+            $errorMessage = $null
             Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage
         }
     } catch {

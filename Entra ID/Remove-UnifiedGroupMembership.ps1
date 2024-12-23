@@ -1,9 +1,5 @@
 function Remove-UnifiedGroupMembership {
 
-    # WIP
-
-    # Objective: Remove a user from from all UnifiedGroups (365 Groups and Teams)
-
     param(
         [Parameter(Mandatory = $true)]
         [String]$UserPrincipalName
