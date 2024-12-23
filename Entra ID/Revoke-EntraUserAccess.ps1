@@ -32,7 +32,8 @@ function Revoke-EntraUserAccess {
         )]
         [Parameter(Mandatory = $True)]
         [ValidateSet("Yes")]
-        [string]$UserConfirmation,
+        [string]
+        $UserConfirmation,
 
         ###############
 
@@ -62,7 +63,8 @@ function Revoke-EntraUserAccess {
             HintText = "Select the user to offboard."
         )]
         [Parameter(Mandatory = $True)]
-        [String]$UserPrincipalName,
+        [String]
+        $UserPrincipalName,
 
         ###############
 
@@ -105,7 +107,8 @@ function Revoke-EntraUserAccess {
             HintText = "Enter an address to forward emails to.",
             DisplayOrder = 3
         )]
-        [string] $ForwardingAddress,
+        [string]
+        $ForwardingAddress,
 
         ###############
 
@@ -152,7 +155,8 @@ function Revoke-EntraUserAccess {
             DisplayOrder = 5,
             HintText = "Enter the user who should be granted access to the ex-employee's mailbox (inbox, calendar, contacts)."
         )]
-        [String]$MailboxTrustee,
+        [String]
+        $MailboxTrustee,
 
         ###############
 
@@ -199,7 +203,36 @@ function Revoke-EntraUserAccess {
             Section = "Options",
             DisplayOrder = 7
         )]
-        [String]$OneDriveTrustee
+        [String]
+        $OneDriveTrustee,
+
+        ###############
+
+        [Parameter(Mandatory = $false)]
+        [SkyKickParameter(
+            DisplayName = "Set out of office message?",
+            Section = "Options",
+            DisplayOrder = 7
+        )]
+        [Boolean]
+        $SetOOO = $false,
+
+        [SkyKickConditionalVisibility({
+                param($GrantOneDriveAccess)
+                return (
+                ($SetOOO -eq $true)
+                )
+            },
+            IsMandatoryWhenVisible = $true
+        )] 
+        [SkyKickParameter(
+            DisplayName = "Out of office message",
+            HintText = "Enter the desired out of office message to set on the user's mailbox.",
+            Section = "Options",
+            DisplayOrder = 8
+        )]
+        [String]
+        $OOOMessage
 
         ###############
 
@@ -254,6 +287,9 @@ function Revoke-EntraUserAccess {
             if ( $GrantOneDriveAccess ) {
                 Add-Results -FinalResults $results -TaskResults  (Add-SPOSiteAdditionalOwner -UserPrincipalName $UserPrincipalName -OneDriveTrustee $OneDriveTrustee)
             }
+            if ( $OOOMessage ) {
+                Add-Results -FinalResults $results -TaskResults  (Set-EXOMailboxAutoReply -Identity $UserPrincipalName -InternalReply $OOOMessage -ExternalReply $OOOMessage )
+            }
         }
         ### Mandatory items ###
         # Reset user password and revoke sessions
@@ -283,7 +319,7 @@ function Revoke-EntraUserAccess {
         
         # Output
         if ( $results ) {
-            $results | Select-Object Status,Task,Message,Details,ErrorMessage,FunctionName | Out-SkyKickTableToHtmlReport @reportParams
+            $results | Select-Object Status, Task, Message, Details, ErrorMessage, FunctionName | Out-SkyKickTableToHtmlReport @reportParams
         }
     } else {
         quit
