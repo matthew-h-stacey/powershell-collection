@@ -16,6 +16,7 @@ Disable the account
 [Optional]
 Convert the account to a shared mailbox
 Forward email
+Auto-reply email
 Mailbox delegation
 OneDrive delegation
 #>
@@ -212,13 +213,13 @@ function Revoke-EntraUserAccess {
         [SkyKickParameter(
             DisplayName = "Set out of office message?",
             Section = "Options",
-            DisplayOrder = 7
+            DisplayOrder = 8
         )]
         [Boolean]
         $SetOOO = $false,
 
         [SkyKickConditionalVisibility({
-                param($GrantOneDriveAccess)
+                param($SetOOO)
                 return (
                 ($SetOOO -eq $true)
                 )
@@ -229,7 +230,7 @@ function Revoke-EntraUserAccess {
             DisplayName = "Out of office message",
             HintText = "Enter the desired out of office message to set on the user's mailbox.",
             Section = "Options",
-            DisplayOrder = 8
+            DisplayOrder = 9
         )]
         [String]
         $OOOMessage
