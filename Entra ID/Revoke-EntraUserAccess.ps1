@@ -44,18 +44,17 @@ function Revoke-EntraUserAccess {
                 # Getting all active users for the argument completer
                 $params = @{
                     Top      = 30
-                    Property = @("UserPrincipalName", "Id")
+                    Property = @("UserPrincipalName", "Id", "DisplayName")
                 }
                 if ($WordToComplete) {
-                    $params += @{
-                        Filter = "startsWith(UserPrincipalName, '$WordToComplete')"
-                    }
+                    $params["Filter"] = "startsWith(UserPrincipalName, '$WordToComplete')"
                 }
 
                 Get-MgUser @params
                 | Sort-Object -Property UserPrincipalName
                 | ForEach-Object {
-                    New-SkyKickCompletionResult -Value $_.UserPrincipalName -DisplayName $_.UserPrincipalName
+                    $displayName = "$($_.UserPrincipalName) ($($_.DisplayName))" # displays users in the format: jsmith@contoso.com (John Smith)
+                    New-SkyKickCompletionResult -Value $_.UserPrincipalName -DisplayName $displayName
                 }
             })]   
         [SkyKickParameter(
