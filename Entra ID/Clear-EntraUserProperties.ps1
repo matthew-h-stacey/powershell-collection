@@ -37,42 +37,72 @@ function Clear-EntraUserProperties {
     $results = [System.Collections.Generic.List[System.Object]]::new()
 
     $userIdentifiers = @("UserPrincipalName", "Id")
-    $propsToClear = @("JobTitle", "CompanyName", "Department", "StreetAddress", "City", "State", "PostalCode", "OfficeLocation", "MobilePhone", "Manager")
+    $propsToClear = @(
+        "jobTitle"
+        "companyName"
+        "department"
+        "streetAddress"
+        "city"
+        "state"
+        "postalCode"
+        "officeLocation"
+        "mobilePhone"
+        "manager"
+        "employeeType"
+        "businessPhones"
+    )
     $userProps = $userIdentifiers + $propsToClear
     $clearedProperties = @{}
 
     try {
         $user = Get-MgUser -UserId $UserPrincipalName -Select $userProps -ErrorAction Stop
         foreach ( $prop in $propsToClear) {
-            if ($prop -like "Manager") {
-                # Switched from cmdlet to the HTTP method using -SkipHttpErrorCheck due to a limitation in CloudManager to fully suppress errors/warnings in a try-catch
-                $manager = Invoke-MgGraphRequest -Method GET -Uri https://graph.microsoft.com/v1.0/users/$UserPrincipalName/manager -SkipHttpErrorCheck
-                if ( $manager -and $manager.error ) {
-                    # User does not have a manager. Suppress errors
-                } else {
+            switch ( $prop ) {
+                "manager" {
+                    # Switched from cmdlet method to HTTP requests using -SkipHttpErrorCheck due to a limitation in CloudManager to fully suppress errors/warnings in a try-catch
+                    $manager = Invoke-MgGraphRequest -Method GET -Uri https://graph.microsoft.com/v1.0/users/$UserPrincipalName/manager -SkipHttpErrorCheck
+                    if ( $manager -and $manager.error ) {
+                        # User does not have a manager. Suppress errors
+                    } else {
+                        try {
+                            Remove-MgUserManagerByRef -UserId $user.Id
+                            $task = "Clear Entra user manager"
+                            $status = "Success"
+                            $message = "Unassigned manager: $($manager.displayName)"
+                            $errorMessage = $null
+                            Add-TaskResult -Task $task -Status $status -Message $message
+                        } catch {
+                            $message = "Failed to remove $UserPrincipalName's manager: $($manager.displayName)"
+                            $errorMessage = $_.Exception.Message
+                            Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage
+                        }
+                    }
+                }
+                "businessPhones" {
+                    $body = '{"businessPhones" : []}'
                     try {
-                        Remove-MgUserManagerByRef -UserId $user.Id
-                        $task = "Clear Entra user manager"
-                        $status = "Success"
-                        $message = "Unassigned manager: $($manager.displayName)"
+                        Invoke-MgGraphRequest  -Method PATCH -Uri "https://graph.microsoft.com/beta/users/$($user.id)" -Body $body
+                        $clearedProperties.Add($Prop, $user.$Prop)
                         $errorMessage = $null
-                        Add-TaskResult -Task $task -Status $status -Message $message
                     } catch {
-                        $message = "Failed to remove $UserPrincipalName's manager: $($manager.displayName)"
+                        $message = "Failed to clear value of property: $prop"
                         $errorMessage = $_.Exception.Message
                         Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage
                     }
                 }
-            } elseif ( $user.$prop  ) {
-                try {
-                    # Multi-value strings need to be passed as an empty array. Regular strings can be set to null                 
-                    Invoke-MgGraphRequest -Method PATCH -Uri "https://graph.microsoft.com/v1.0/Users/$($user.Id)" -Body @{$prop = $null }
-                    $clearedProperties.Add($Prop, $user.$Prop)
-                    $errorMessage = $null
-                } catch {
-                    $message = "Failed to clear value of property: $prop"
-                    $errorMessage = $_.Exception.Message
-                    Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage
+                default {
+                    if ( $user.$prop  ) {
+                        try {
+                            # Multi-value strings need to be passed as an empty array. Regular strings can be set to null                 
+                            Invoke-MgGraphRequest -Method PATCH -Uri "https://graph.microsoft.com/v1.0/Users/$($user.Id)" -Body @{$prop = $null }
+                            $clearedProperties.Add($Prop, $user.$Prop)
+                            $errorMessage = $null
+                        } catch {
+                            $message = "Failed to clear value of property: $prop"
+                            $errorMessage = $_.Exception.Message
+                            Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage
+                        }
+                    }
                 }
             }
         }
