@@ -17,14 +17,13 @@ $start = Get-Date
 ...
 #script here
 ...
-$now = Get-Date
-$duration = New-TimeSpan -Start $start -End $now
-
-$nowFormatted = $now.ToString("yyyy-MM-dd HH:mm:ss")
+$end = Get-Date
+$endFormatted = $end.ToString("yyyy-MM-dd HH:mm:ss")
+$duration = New-TimeSpan -Start $start -End $end
 
 if ($duration.TotalMinutes -lt 1) {
-    Write-Host "Script finished at $nowFormatted. Duration: $($duration.Seconds) seconds."
+    Write-Host "Script finished at $endFormatted. Duration: $($duration.Seconds) seconds."
 } else {
-    Write-Host "Script finished at $nowFormatted. Duration: $($duration.Minutes) minutes and $($duration.Seconds) seconds."
+    Write-Host "Script finished at $endFormatted. Duration: $($duration.Minutes) minutes and $($duration.Seconds) seconds."
 }
 
