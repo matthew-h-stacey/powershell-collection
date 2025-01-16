@@ -11,3 +11,20 @@ Write-Output "$timeStamp [SUCCESS] Thing succeeded!"
 # Example 2: File name for output
 $resultsOutput = "$ExportPath\myOutput_$((Get-Date -Format 'yyyy-MM-dd_HHmm')).csv"
 # -> \myOutput_2024-10-04_1111.csv
+
+# Example 3: Script timestamp and duration
+$start = Get-Date
+...
+#script here
+...
+$now = Get-Date
+$duration = New-TimeSpan -Start $start -End $now
+
+$nowFormatted = $now.ToString("yyyy-MM-dd HH:mm:ss")
+
+if ($duration.TotalMinutes -lt 1) {
+    Write-Host "Script finished at $nowFormatted. Duration: $($duration.Seconds) seconds."
+} else {
+    Write-Host "Script finished at $nowFormatted. Duration: $($duration.Minutes) minutes and $($duration.Seconds) seconds."
+}
+
