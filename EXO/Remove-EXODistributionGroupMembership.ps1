@@ -47,9 +47,10 @@ function Remove-EXODistributionGroupMembership {
         if ( $removedDistributionGroups ) {
             $removedDistributionGroups = ($removedDistributionGroups | Sort-Object) -join ", "
             $status = "Success"
-            $message = "Removed $UserPrincipalName from the following distribution groups: $removedDistributionGroups"
+            $message = "Removed $UserPrincipalName from the following distribution groups"
+            $details = $removedDistributionGroups
             $errorMessage = $null
-            Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage
+            Add-TaskResult -Task $task -Status $status -Message $message -Details $details -ErrorMessage $errorMessage
         }   
     } else {
         $status = "Skipped"

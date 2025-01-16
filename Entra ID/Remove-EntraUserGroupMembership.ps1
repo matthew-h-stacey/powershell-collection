@@ -62,9 +62,10 @@ function Remove-EntraUserGroupMembership {
         if ( $removedGroups ) {
             $removedGroupsString = ($removedGroups | Sort-Object) -join ', '
             $status = "Success"
-            $message = "Removed $UserPrincipalName from Entra ID group(s): $removedGroupsString"
+            $message = "Removed $UserPrincipalName from Entra ID group(s)"
+            $details = $removedGroupsString
             $errorMessage = $null
-            Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage
+            Add-TaskResult -Task $task -Status $status -Message $message -Details $details -ErrorMessage $errorMessage
         }
     } catch {
         $message = "Failed to locate Entra user: $UserPrincipalName. Please confirm the UserPrincipalName and try again"

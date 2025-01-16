@@ -51,9 +51,10 @@ function Remove-UnifiedGroupMembership {
     if ( $groupsRemoved ) {
         $groupsRemovedString = ($groupsRemoved | Sort-Object) -join ", "
         $status = "Success"
-        $message = "Removed $UserPrincipalName from UnifiedGroup(s): $groupsRemovedString"
+        $message = "Removed $UserPrincipalName from UnifiedGroup(s)"
+        $details = $groupsRemovedString
         $errorMessage = $null
-        Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage
+        Add-TaskResult -Task $task -Status $status -Message $message -Details $details -ErrorMessage $errorMessage
         return $results
     }
 

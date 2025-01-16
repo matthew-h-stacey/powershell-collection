@@ -46,7 +46,8 @@ function Remove-EntraUserAssignedLicenses {
                 try {
                     $user = Set-MgUserLicense -UserId $user.UserPrincipalName -RemoveLicenses $licensesToRemove -AddLicenses @{} 
                     $status = "Success"
-                    $message = "Removed licenses from ${userPrincipalName}: $removedLicenses"
+                    $message = "Removed license(s) from ${userPrincipalName}"
+                    $details = $removedLicenses
                     $errorMessage = $null
                 } catch {
                     $status = "Failure"

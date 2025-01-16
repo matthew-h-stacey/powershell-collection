@@ -122,14 +122,16 @@ function Remove-UnifiedGroupOwnership {
         if ( $assignedOwnership ) {
             $assignedOwnershipString = ($assignedOwnership | Sort-Object) -join ", "
             $status = "Success"
-            $message = "Granted $($newOwner.UserPrincipalName) ownership of Unified Group(s): $assignedOwnershipString"
+            $message = "Granted $($newOwner.UserPrincipalName) ownership of Unified Group(s)"
+            $details = $assignedOwnershipString
             $errorMessage = $null
-            Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage
+            Add-TaskResult -Task $task -Status $status -Message $message -Details $details -ErrorMessage $errorMessage
         }
         if ( $removedGroups ) {
             $removedGroupsString = ($removedGroups | Sort-Object) -join ", "
             $status = "Success"
-            $message = "Removed ${UserPrincipalName}'s ownership of Unified Group(s): $removedGroupsString"
+            $message = "Removed ${UserPrincipalName}'s ownership of Unified Group(s)"
+            $details = $removedGroupsString
             $errorMessage = $null
             Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage
         }
