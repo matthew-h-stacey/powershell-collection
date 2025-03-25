@@ -98,12 +98,12 @@ function Get-AADUserReport {
         [Boolean]$IncludeManager = $false,
 
         [SkyKickParameter(
-            DisplayName = "Employee ID",    
+            DisplayName = "Employee type/ID/hire date",    
             Section = "Company Information",
             DisplayOrder = 10,
-            HintText = "Display the user's employee ID."
+            HintText = "Display the user's employee info."
         )]
-        [Boolean]$IncludeEmployeeId = $true,
+        [Boolean]$IncludeEmployeeInfo = $true,
 
         [SkyKickParameter(
             DisplayName = "Street Address",    
@@ -155,14 +155,14 @@ function Get-AADUserReport {
 	)
 
     # Return one array ($MSGraphOutput) with all objects, supporting count past the default 999
-    $URI = 'https://graph.microsoft.com/beta/users?$select=DisplayName,UserPrincipalName,Mail,UserType,AccountEnabled,onPremisesSyncEnabled,signInActivity,AssignedLicenses,LastPasswordChangeDateTime,CompanyName,EmployeeId,Department,JobTitle,StreetAddress,City,State,Country,BusinessPhones,MobilePhone&$top=999'
-    $MSGraphOutput = @()
+    $URI = 'https://graph.microsoft.com/beta/users?$select=DisplayName,UserPrincipalName,Mail,UserType,AccountEnabled,createdDateTime,onPremisesSyncEnabled,signInActivity,AssignedLicenses,LastPasswordChangeDateTime,CompanyName,EmployeeType,EmployeeId,EmployeeHireDate,Department,JobTitle,StreetAddress,City,State,Country,BusinessPhones,MobilePhone&$top=999'
+    $MSGraphOutput = [System.Collections.Generic.List[System.Object]]::new()
     $nextLink = $null
     do {
         $uri = if ($nextLink) { $nextLink } else { $URI }
         $response = Invoke-MgGraphRequest -Uri $uri -Method GET
         $output = $response.Value
-        $MSGraphOutput += $output
+        $MSGraphOutput.Add($output)
         $nextLink = $response.'@odata.nextLink'
     } until (-not $nextLink)
 
@@ -186,7 +186,7 @@ function Get-AADUserReport {
     $ReportFooter = "Report created using SkyKick Cloud Manager"
 
     # Empty array used to store output before exporting the report to HTML
-    $results = @()
+    $results = [System.Collections.Generic.List[System.Object]]::new()
 
     # Table for Microsoft SKU ID to friendly names
     $SKUsMappingTable = Get-Microsoft365LicensesMappingTable
@@ -200,13 +200,13 @@ function Get-AADUserReport {
     $sharedMailboxes = Get-EXOMailbox -ResultSize unlimited -Filter "RecipientTypeDetails -eq 'SharedMailbox'" $UPN
 
     # Retrieve directory roles and membership
-    $allRoleMemberships = @()
+    $allRoleMemberships = [System.Collections.Generic.List[System.Object]]::new()
     Get-MgDirectoryRole | foreach-object {
         $member = Get-MgDirectoryRoleMember -DirectoryRoleId $_.Id
-        $allRoleMemberships += [pscustomobject]@{
+        $allRoleMemberships.Add([pscustomobject]@{
             Role = $_.DisplayName
             Member = @($member.AdditionalProperties.userPrincipalName)
-        }
+        })
     }
 
     # Iterate through each user in the Graph output
@@ -256,6 +256,17 @@ function Get-AADUserReport {
             Source                      =   $Source
             SharedMailbox               =   $isSharedMailbox
         }
+
+        $manager = if ( $IncludeManager ) {
+            try {
+                Get-MgUserManager -UserId $User.Id -ErrorAction Stop
+            } catch {
+                # User does not have a manager
+                $null
+            }
+        } else {
+            $null
+        }
         $optionalProperties = @(
             @{
 		        Name = 'LastLogin'  
@@ -300,16 +311,39 @@ function Get-AADUserReport {
                 Value = $User.JobTitle
             },
             @{
-                Name = 'Manager'
+                Name = 'ManagerName'
                 Include = $IncludeManager      	
-                Value = if ($IncludeManager) {
-                        (Get-MgUserManager -UserId $User.Id).AdditionalProperties.displayName
-                    }
+                Value = if ( $null -ne $manager ) {
+                    $manager.AdditionalProperties.displayName
+                }
+            },
+            @{
+                Name = 'ManagerEmail'
+                Include = $IncludeManager      	
+                Value = if ( $null -ne $manager ) {
+                    $manager.AdditionalProperties.mail
+                }
             },
             @{
                 Name = 'EmployeeId'
-                Include = $IncludeEmployeeId      	
+                Include = $IncludeEmployeeInfo
                 Value = $User.employeeId
+            },
+            @{
+                Name = 'EmployeeType'
+                Include = $IncludeEmployeeInfo
+                Value = $User.EmployeeType
+            },
+            @{
+                Name = 'HireDate'
+                Include = $IncludeEmployeeInfo
+                Value = $User.EmployeeHireDate
+            },
+            
+            @{
+                Name = 'Created'
+                Include = $IncludeEmployeeInfo
+                Value = $User.createdDateTime
             },
             @{
                 Name = 'StreetAddress'
@@ -347,7 +381,7 @@ function Get-AADUserReport {
                 $userHashTable.Add($property.Name, $property.Value)
             }
         }
-        $results += [PSCustomObject]$userHashTable
+        $results.Add([PSCustomObject]$userHashTable)
     }
 
     Out-SKSolutionReport -Content $results -ReportTitle $ReportTitle -ReportFooter $ReportFooter -SeparateReportFileForEachCustomer
@@ -359,7 +393,7 @@ function Get-AADUserReport {
     }
     #>
     if ( $IncludeM365LicenseReport ) {
-        Get-M365LicenseReportBeta -Clients $customerContext -Scope 'All'
+        Get-M365LicenseReportBeta -UnderallocatedSKUsOnly $false -Clients $customerContext -Scope 'All' 
     }
 
 
