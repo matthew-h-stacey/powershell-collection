@@ -1,4 +1,9 @@
 <#
+[TO DO]
+Add multiselection for mailbox and OneDrive delegation
+Split more information between Message and Details columns
+Add timestamp to end of report
+
 [Mandatory]
 Reset the password
 Revoke user sessions
@@ -260,6 +265,7 @@ function Revoke-EntraUserAccess {
         }
     }
 
+    $start = Get-Date
     $results = [System.Collections.Generic.List[System.Object]]::new()
     $htmlReportName = "Entra ID user offboard report: $UserPrincipalName"
     $htmlReportFooter = "Report created using SkyKick Cloud Manager"
@@ -319,6 +325,16 @@ function Revoke-EntraUserAccess {
         
         # Output
         if ( $results ) {
+            # Calculate script runtime and add a message to the end of the output
+            $end = Get-Date
+            $endFormatted = $end.ToString("yyyy-MM-dd HH:mm:ss")
+            $duration = New-TimeSpan -Start $start -End $end
+            if ($duration.TotalMinutes -lt 1) {
+                $details = "Script finished at $endFormatted. Duration: $($duration.Seconds) seconds."
+            } else {
+                $details = "Script finished at $endFormatted. Duration: $($duration.Minutes) minutes and $($duration.Seconds) seconds."
+            }
+            Add-Results -Status "FINISH" -Task $null -Message $null -Details $details
             $results | Select-Object Status, Task, Message, Details, ErrorMessage, FunctionName | Out-SkyKickTableToHtmlReport @reportParams
         }
     } else {
