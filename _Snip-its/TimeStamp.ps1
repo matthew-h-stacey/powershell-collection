@@ -27,3 +27,5 @@ if ($duration.TotalMinutes -lt 1) {
     Write-Host "Script finished at $endFormatted. Duration: $($duration.Minutes) minutes and $($duration.Seconds) seconds."
 }
 
+# Example 4: Quick output to file example
+$reportName = "MyReport_$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss')"
