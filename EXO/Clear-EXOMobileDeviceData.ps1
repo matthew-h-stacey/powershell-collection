@@ -66,7 +66,7 @@ function Clear-EXOMailboxMobileData {
     
     if ( $removedPhones ) {
         $status = "Success"
-        $message = "Initiated data removal commands to each connected device $userDevicesCount"
+        $message = "Initiated data removal commands to each connected device (count: $userDevicesCount)"
         Add-TaskResult -Task $task -Status $status -Message $message -ErrorMessage $errorMessage -Details $removedPhones
 
     }
