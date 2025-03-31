@@ -4,25 +4,42 @@ function Invoke-GraphBatchRequest {
     Execute a batch GET request to an API endpoint
 
     .DESCRIPTION
-    This functions takes a collection of objects and iterates through them to build batch Graph requests (max: 20 requests in a batch). The purpose of this is to gain better performance versus running individual Graph queries for each object in the collection. This also helps to prevent/reduce throttling.
+    This functions takes a collection of objects and iterates through them to build batch Graph requests (max: 20 requests
+    in a batch). The purpose of this is to gain better performance versus running individual Graph queries for each object
+    in the collection. This also helps to prevent/reduce throttling.
 
     .PARAMETER InputObjects
     The collection to run the batch query on
 
     .PARAMETER ApiQuery
-    The API endpoint to query. The base URL is a Graph batch endpoint, so this is just the portion after /1.0/ or /beta/ and any relevant filters
+    The API endpoint to query. The base URL is a Graph batch endpoint, so this is just the portion after /1.0/ or
+    /beta/ and any relevant filters
 
     .PARAMETER Placeholder
-    If you are passing objects and need a variable to differentiate them for ApiQuery construction, enclose the variable in quotes and specify it here. See example below
+    If you are passing objects and need a variable to differentiate them for ApiQuery construction, enclose the variable
+    in quotes and specify it here. See example below
+
+    .PARAMETER CustomProperty
+    This parameter allows you to attach a custom attribute from the source object to each request in a batch operation. 
+    This is useful when the response does not include identifying information from the original request.
+
+    For example, when retrieving the manager for a list of users via a batch request, the response will include the manager’s
+    details but not the original user for whom the request was made. By including the original user's ID in the CustomProperty field, you can 
+    correlate the response with its respective request
 
     .EXAMPLE
-    Assume $allGroupMembers is a collection of user objects with the property "UserPrincipalName"
-    The following uses the auditLogs/signins endpoint to query signins for all users in the collection, filtering by successful interactive logins for each user
-    The most important parts to review are the formatting of the endpoint and usage of the placeholder - which is {Property} and declared in -Placeholder
-    Those properties are replaced as the function processes each object
+    Example 1 - Retrieve audit logs for a group of users:
+    # Assume $allGroupMembers is a collection of user objects with the property "UserPrincipalName"
+    # The following uses the auditLogs/signins endpoint to query signins for all users in the collection, filtering by successful interactive logins for each user
+    # The most important parts to review are the formatting of the endpoint and usage of the placeholder - which is {Property} and declared in -Placeholder
+    # Those properties are replaced as the function processes each object
 
     $urlTemplate = "auditLogs/signins?`$filter=userPrincipalName eq '{UserPrincipalName}' and status/errorCode ne 0 and IsInteractive eq true&`$top=1"
     $graphResponse = Invoke-GraphBatchRequest -InputObjects $allGroupMembers -ApiQuery $urlTemplate -Placeholder "UserPrincipalName"
+
+    Example 2 - Retrieve managers for a group of users
+    $urlTemplate = "users/{Id}/manager"
+    $managers = Invoke-GraphBatchRequest -InputObjects $users -ApiQuery $urlTemplate -Placeholder "Id" -CustomProperty Id
     
     #>
     [CmdletBinding()]
@@ -37,7 +54,11 @@ function Invoke-GraphBatchRequest {
 
         [Parameter(Mandatory = $false)]
         [string]
-        $Placeholder
+        $Placeholder,
+
+        [Parameter(Mandatory = $false)]
+        [string]
+        $CustomProperty
     )
 
     # Empty list to store results in
@@ -78,14 +99,21 @@ function Invoke-GraphBatchRequest {
                     'Url'    = $url
                 }
                 # Store the original request in the cache
-                $requestCache[$request.Id.ToString()] = $request
+                $requestCache[$request.Id.ToString()] = @{
+                    Body           = $request
+                    CustomProperty = if ( $CustomProperty -and $null -ne $_.$CustomProperty) {
+                        $_.$CustomProperty
+                    } else {
+                        $null 
+                    }
+                }
 
                 # The batch payload expects an array. Return the single request as an array to $graphBatchRequests
                 $requestArray = @() 
                 $requestArray += $request
                 $requestArray
             }
-            
+        
         } else {
             # there are multiple entries sent to the batch request
             $graphBatchRequests = $InputObjects[$i..$end] | ForEach-Object {
@@ -102,7 +130,15 @@ function Invoke-GraphBatchRequest {
                     'Url'    = $url
                 }
                 # Store the original request in the cache
-                $requestCache[$request.Id.ToString()] = $request
+                # If a custom property attribute is provided, attempt to locate it on the current request and cache it
+                $requestCache[$request.Id.ToString()] = @{
+                    Body           = $request
+                    CustomProperty = if ( $CustomProperty -and $null -ne $_.$CustomProperty) {
+                        $_.$CustomProperty
+                    } else {
+                        $null 
+                    }
+                }
 
                 # Return the request object to $graphBatchRequests
                 $request
@@ -131,7 +167,9 @@ function Invoke-GraphBatchRequest {
                 200 {
                     # 200 = OK
                     Write-Verbose "$timeStamp [SUCCESS] Request ID $($response.id) succeeded with status code: $($response.status)"
-                    $outputList.Add([PSCustomObject]$response.body)
+                    $responseBody = $response.Body
+                    $responseBody["CustomProperty"] = $originalRequest.CustomProperty
+                    $outputList.Add($responseBody)
                 }
                 429 {
                     # 429 = Too many requests (throttling)
@@ -162,13 +200,15 @@ function Invoke-GraphBatchRequest {
                             $retryResponse = Invoke-MgGraphRequest @retryParams
                             if ( $retryResponse.responses.status -eq 200) {
                                 $timeStamp = Get-Date -Format "yyyy-MM-ddTHH:mm:ssK"
-                                $outputList.Add([PSCustomObject]$retryResponse.responses.body)
                                 Write-Verbose "$timeStamp [SUCCESS] Request ID $($response.id) succeeded with status code: $($retryResponse.responses.status)"
+                                $responseBody = $response.Body
+                                $responseBody["CustomProperty"] = $originalRequest.CustomProperty
+                                $outputList.Add($responseBody)                                
                                 break
                             }
                             $retryCount++
                             if ($retryCount -ge $maxRetries) {
-                                Write-Verbose "$timeStamp [ERROR] Request ID $($response.id)] skipped due to max retries reached"
+                                Write-Output "$timeStamp [ERROR] Request ID $($response.id)] skipped due to max retries reached"
                                 $errorList.Add([pscustomobject]@{
                                         Id     = $response.id
                                         Status = $retryResponse.responses.status
@@ -179,7 +219,7 @@ function Invoke-GraphBatchRequest {
                             }
                             $retryAfter = $initialDelay * [math]::Pow(2, $retryCount)
                         } catch {
-                            Write-Verbose "$timeStamp [ERROR] Request ID $($response.id)] failed after retry with status code $($retryResponse.status). Error: $($retryResponse.body.error.message)"
+                            Write-Output "$timeStamp [ERROR] Request ID $($response.id)] failed after retry with status code $($retryResponse.status). Error: $($retryResponse.body.error.message)"
                             $errorList.Add([pscustomobject]@{
                                     Id     = $response.id
                                     Status = $retryResponse.responses.status
@@ -191,7 +231,7 @@ function Invoke-GraphBatchRequest {
                 }
                 default {
                     # Log errors for unexpected status codes
-                    Write-Verbose "$timeStamp [ERROR] Request ID $($response.id) failed with status code $($response.status). Error: $($response.body.error.code) $($response.body.error.message)"
+                    Write-Output "$timeStamp [ERROR] Request ID $($response.id) failed with status code $($response.status). Error: $($response.body.error.code) $($response.body.error.message)"
                     $errorList.Add([pscustomobject]@{
                             Id     = $response.id
                             Status = $response.status
@@ -202,5 +242,14 @@ function Invoke-GraphBatchRequest {
             }            
         }
     }
-    return $outputList
+    # If -Verbose
+    if ($VerbosePreference -eq 'Continue') {
+        return [PSCustomObject]@{
+            Results  = $outputList
+            Failures = $errorList
+        }
+    } else {
+        return $outputList
+    }
+
 }
