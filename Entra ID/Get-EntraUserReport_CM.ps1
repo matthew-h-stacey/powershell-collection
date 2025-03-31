@@ -33,17 +33,17 @@ function Get-EntraUserReport {
                 Get-MgGroup -All | Sort-Object DisplayName | ForEach-Object {
                     New-SkyKickCompletionResult -Value $_.Id -DisplayName $_.DisplayName
                 }
-            })] 
+            })]
         [Parameter(Mandatory = $false)]
         [SkyKickParameter(
             DisplayName = "Entra Group",
             Section = "Scope",
             DisplayOrder = 2
-        )] 
+        )]
         [string] $GroupId,
 
         [SkyKickParameter(
-            DisplayName = "Exclude members of CM_NonUserAccounts",    
+            DisplayName = "Exclude members of CM_NonUserAccounts",
             Section = "Scope",
             DisplayOrder = 3,
             HintText = "Enabling this settings filters out all unlicensed users, and any members of this Azure AD group: CM_NonUserAccounts. Before enabling this, ensure that the group is present and populated with the service/admin accounts that should be excluded from this report."
@@ -51,58 +51,58 @@ function Get-EntraUserReport {
         [Boolean]$IncludeOnlyActiveUsers = $false, # "user" here implies a human user
 
         [SkyKickParameter(
-            DisplayName = "Directory info",    
+            DisplayName = "Directory info",
             Section = "Optional Parameters",
             DisplayOrder = 1,
-            HintText = "Display user type, account enablement, and source (cloud-only or synced)"
+            HintText = "Include: UserType, Enabled, Source (cloud-only or AD-synced)"
         )]
         [Boolean]$IncludeDirectoryInfo = $true,
 
         [SkyKickParameter(
-            DisplayName = "Mailbox info",    
+            DisplayName = "Mailbox info",
             Section = "Optional Parameters",
             DisplayOrder = 1,
-            HintText = "Display email address, email aliases, and alias property"
+            HintText = "Include: Mail, SharedMailbox, MailboxName, MailboxAliases"
         )]
         [Boolean]$IncludeMailboxInfo = $true,
 
         [SkyKickParameter(
-            DisplayName = "Employment and company info",    
+            DisplayName = "Employment and company info",
             Section = "Optional Parameters",
             DisplayOrder = 1,
-            HintText = "Include department, job title, company name, employee type, etc."
+            HintText = "Include: CompayName, Department, JobTitle, EmployeeId, EmployeeType, HireDate, Created"
         )]
         [Boolean]$IncludeEmploymentCompanyInfo = $true,
 
         [SkyKickParameter(
-            DisplayName = "Manager",    
+            DisplayName = "Manager",
             Section = "Optional Parameters",
             DisplayOrder = 2,
-            HintText = "Display the user's manager."
+            HintText = "Include: ManagerName, ManagerEmail"
         )]
         [Boolean]$IncludeManager = $false,
 
         [SkyKickParameter(
-            DisplayName = "Contact and address info",    
+            DisplayName = "Contact and address info",
             Section = "Optional Parameters",
             DisplayOrder = 3,
-            HintText = "Include address, city, state, phone numbers, etc."
+            HintText = "Include: StreetAddress, City, State, Country, BusinessPhones,TeamsNumber"
         )]
         [Boolean]$IncludeContactInfo = $true,
 
         [SkyKickParameter(
-            DisplayName = "Assigned licenses",    
+            DisplayName = "Assigned licenses",
             Section = "Optional Parameters",
             DisplayOrder = 4,
-            HintText = "Display the licenses assigned to the user."
+            HintText = "Include licenses assigned to the user"
         )]
-        [Boolean]$IncludeLicenses = $true,        
+        [Boolean]$IncludeLicenses = $true,
 
         [SkyKickParameter(
             DisplayName = "Login activity",
             Section = "Optional Parameters",
             DisplayOrder = 5,
-            HintText = "Display user's last login timestamp and days since login."
+            HintText = "Include: LastLogin, InactiveDays"
         )]
         [Boolean]$IncludeLoginActivity = $true,
 
@@ -110,7 +110,7 @@ function Get-EntraUserReport {
             DisplayName = "Password info",
             Section = "Optional Parameters",
             DisplayOrder = 6,
-            HintText = "Display last password change, password expiration, etc."
+            HintText = "Include: PasswordNeverExpires, PasswordExpired, LastPasswordChange, PasswordExpiresOn, DaysSincePwChange"
         )]
         [Boolean]$IncludePasswordInfo = $true,
 
@@ -118,18 +118,64 @@ function Get-EntraUserReport {
             DisplayName = "Entra roles",
             Section = "Optional Parameters",
             DisplayOrder = 7,
-            HintText = "Display assigned Entra roles"
+            HintText = "Include assigned Entra roles"
         )]
         [Boolean]$IncludeEntraRoles = $true,
 
         [SkyKickParameter(
-            DisplayName = "Tenant license report",    
+            DisplayName = "Tenant license report",
             Section = "Optional Parameters",
             DisplayOrder = 8,
             HintText = "Enabling this settings will generate a second report for all licenses on the tenant."
         )]
         [Boolean]$IncludeM365LicenseReport = $false
     )
+
+    function Invoke-GraphPaginatedRequest {
+        <#
+    .SYNOPOSIS
+    Perform a GET against a Graph endpoint with support for 999+ objects
+
+    .PARAMETER Uri
+    The full Graph endpoint to query
+
+    .EXAMPLE
+    $graphResponse = Invoke-GraphPaginatedRequest -Uri $uri
+    #>
+        param (
+            [Parameter(Mandatory = $true)]
+            [string]
+            $Uri
+        )
+        $graphResponse = @()
+        $nextLink = $null
+        do {
+            # Check for nextLink
+            $Uri = if ($nextLink) {
+                $nextLink
+            } else {
+                $Uri
+            }
+            # Perform Graph Request
+            $response = try {
+                Invoke-MgGraphRequest -Uri $Uri -Method GET
+            } catch {
+                Write-Error "Microsoft Graph query failed. Error: $($_.Exception.Message)"
+                exit 1
+            }
+            $output = $response.Value
+            $graphResponse += $output
+            $nextLink = $response.'@odata.nextLink'
+        } until (-not $nextLink)
+
+        return $graphResponse
+    }
+
+    ### REPORT VARIABLES
+    $customerContext = Get-CustomerContext
+    $clientName = $customerContext.CustomerName
+    $reportTitle = "$($clientName) Entra ID User Report"
+    $reportFooter = "Report created using SkyKick Cloud Manager"
 
     ### PROPERTIES
     ## Create initial properties array
@@ -142,7 +188,7 @@ function Get-EntraUserReport {
         "userType"
         "accountEnabled"
         "onPremisesSyncEnabled"
-    
+
         # Employment/company
         "companyName"
         "employeeId"
@@ -153,7 +199,7 @@ function Get-EntraUserReport {
 
         # Licensing
         "assignedLicenses"
-        
+
         # Location and contact info
         "streetAddress"
         "city"
@@ -166,24 +212,24 @@ function Get-EntraUserReport {
         "createdDateTime"
         "lastPasswordChangeDateTime"
     )
-    # Store date to use for both a script timestamp and password info (optional)
-    $today = Get-Date
+
     ## Optional: signInActivity - Entra Premium licensing is required to retrieve signInActivity
     if ( $IncludeLoginActivity ) {
         $entraLicense = Get-AzureADLicense
         if ( $entraLicense.Premium -eq $true ) {
             $properties += "signInActivity"
-        } 
+        }
     }
     ## Optional: password information
     if ( $IncludePasswordInfo ) {
         $properties += "passwordPolicies"
         $pwExpirationPolicy = Get-MgDomainPasswordExpiration
-        
+        $today = Get-Date
     }
 
     ### RETRIEVE USERS/GOUPS VIA GRAPH
-    ## Construct the URI with support for 1000+ objects
+    ## Use /users endpoint with pagination for all users
+    ## Otherwise, use batching
     $batchRequired = $false
     if ( $AllUsers ) {
         # All properties are available via the /users endpoint
@@ -193,22 +239,8 @@ function Get-EntraUserReport {
         $uri = "https://graph.microsoft.com/beta/groups/$GroupId/members?`$top=999"
         $batchRequired = $true
     }
-    $graphResponse = @()
-    $nextLink = $null
-    do {
-        $uri = if ($nextLink) { $nextLink } else { $uri }
-        $response = try {
-            Invoke-MgGraphRequest -Uri $uri -Method GET
-        } catch {
-            Write-Error "Failed to retrieve users via MS Graph. Error: $($_.Exception.Message)"
-            exit 1
-        }
-        $output = $response.Value
-        $graphResponse += $output
-        $nextLink = $response.'@odata.nextLink'
-    } until (-not $nextLink)
+    $graphResponse = Invoke-GraphPaginatedRequest -Uri $uri
     ## If batching is required, group users into batches of 20 to send to the batch endpoint
-    ## This process creates a single  
     if ( $batchRequired ) {
         # Take $graphResponse and create batches of HTTP calls using the URL template, replacing "{Id}" with the user ID
         $urlTemplate = "users/{Id}?`$select=$($properties -join ',')"
@@ -216,16 +248,29 @@ function Get-EntraUserReport {
     } else {
         $users = $graphResponse
     }
-    
+
     if ( -not $users ) {
         Write-Output "[INFO] No users found to report on"
         exit
     }
-    
-    ### OPTIONAL: ACTIVE USERS FILTER
-    ## Remove users from the output that are either members of Entra security group
-    ## "CM_NonUserAccounts" or those without a license
-    if ( $IncludeOnlyActiveUsers ) { 
+
+    ### OPTIONAL LOOKUPS
+    ## Retrieve managers via batch
+    # Use batch graph call vs. individual Get-MgUserManager cmdlet on each user for better performance
+    if ( $IncludeManager ) {
+        $urlTemplate = "users/{Id}/manager"
+        $managers = Invoke-GraphBatchRequest -InputObjects $users -ApiQuery $urlTemplate -Placeholder "Id" -CustomProperty Id
+        $managersLookup = @{}
+        foreach ($manager in $managers) {
+            if ( $manager.CustomProperty ) {
+                $managersLookup[$manager.CustomProperty] = $manager
+            }
+        }
+    }
+
+    ## "Active users" filter
+    # Remove users from the output that are either members of Entra security group "CM_NonUserAccounts" or those without a license
+    if ( $IncludeOnlyActiveUsers ) {
         $excludedGroupID = (Get-MgGroup -Filter "DisplayName eq 'CM_NonUserAccounts'" -WarningAction Stop -ErrorAction Stop).Id
         if ( $null -eq $excludedGroupID ) {
             Write-Output "Group missing from Azure AD: CM_NonUserAccounts. Please ensure the group is created and populated with the service/admin accounts that should be excluded from this report."
@@ -237,28 +282,32 @@ function Get-EntraUserReport {
         $users = $users | Where-Object { $_.AssignedLicenses -ne @() } # removes users that don't have licenses
     }
 
-    ### REPORT VARIABLES
-    $customerContext = Get-CustomerContext
-    $clientName = $customerContext.CustomerName
-    $reportTitle = "$($clientName) Entra ID User Report" 
-    $reportFooter = "Report created using SkyKick Cloud Manager"
-    
-    ### REPORT LOOKUPS
-    ## Table for Microsoft SKU ID to friendly names
-    $skusMappingTable = Get-Microsoft365LicensesMappingTable
-    ## All Teams numbers associated with users
-    $allTeamsNumbers = Get-CsOnlineUser | Where-Object { $_.LineURI -notlike $null } | Select-Object DisplayName, UserPrincipalName, LineURI
-    $teamsNumLookup = @{}
-    foreach ($number in $allTeamsNumbers) {
-        $teamsNumLookup[$number.UserPrincipalName] = $number 
+    ## Mailboxes
+    if ( $IncludeMailboxInfo ) {
+        ## All mailboxes where the UPN is contained in the MS Graph output
+        $mailboxes = Get-EXOMailbox -ResultSize Unlimited | Where-Object { $_.UserPrincipalName -in $graphResponse.UserPrincipalName }
+        # Create a mailbox lookup hash table for all mailboxes
+        $mailboxLookup = @{}
+        foreach ($mb in $mailboxes) {
+            $mailboxLookup[$mb.UserPrincipalName] = $mb
+        }
     }
-    ## All mailboxes where the UPN is contained in the MS Graph output
-    $mailboxes = Get-EXOMailbox -ResultSize Unlimited | Where-Object { $_.UserPrincipalName -in $graphResponse.UserPrincipalName }
-    # Create a mailbox lookup hash table for all mailboxes
-    $mailboxLookup = @{}
-    foreach ($mb in $mailboxes) {
-        $mailboxLookup[$mb.UserPrincipalName] = $mb
+
+    ## Microsoft licensing
+    # This generates a table for Microsoft SKU ID to friendly name lookup
+    if ( $IncludeLicenses ) {
+        $skusMappingTable = Get-Microsoft365LicensesMappingTable
     }
+
+    ## Teams numbers
+    if ( $IncludeContactInfo ) {
+        $allTeamsNumbers = Get-CsOnlineUser | Where-Object { $_.LineURI -notlike $null } | Select-Object DisplayName, UserPrincipalName, LineURI
+        $teamsNumLookup = @{}
+        foreach ($number in $allTeamsNumbers) {
+            $teamsNumLookup[$number.UserPrincipalName] = $number
+        }
+    }
+
     ## Directory roles and membership
     if ( $IncludeEntraRoles ) {
         $allRoleMemberships = @()
@@ -269,10 +318,7 @@ function Get-EntraUserReport {
                 Member = @($member.AdditionalProperties.userPrincipalName)
             }
         }
-    }    
-
-    # Empty array used to store output before exporting the report to HTML
-    $results = [System.Collections.Generic.List[System.Object]]::new()
+    }
 
     ### FOREACH PROCESSING START
     <#
@@ -281,15 +327,16 @@ function Get-EntraUserReport {
     - Based on the options selected at runtime, add the selected optional properties to the original user hash table
     - Add the user hash table to the results array as a PSCustomObject for easy reporting
     #>
+    $results = [System.Collections.Generic.List[System.Object]]::new()
     foreach ( $user in $users) {
         $upn = $user.UserPrincipalName
         ## Retrieve sign-in information
-        if ($IncludeLoginActivity) { 
+        if ($IncludeLoginActivity) {
             $lastLogin = $user.signInActivity.lastSignInDateTime
             if ($lastLogin) {
                 $inactiveDays = (New-TimeSpan -Start $user.signInActivity.lastSignInDateTime).Days
             } else {
-                $inactiveDays = "N/A" 
+                $inactiveDays = "N/A"
             }
         }
         ## Retrieve password information
@@ -301,6 +348,7 @@ function Get-EntraUserReport {
                 if ( $user.onPremisesSyncEnabled -eq $true) {
                     # AD synced
                     $pwExpired = "Check AD"
+                    $pwExpiresOn = "Check AD"
                 } else {
                     # Cloud-only
                     $pwMaxAge = $pwExpirationPolicy.PasswordMaxAge
@@ -313,7 +361,7 @@ function Get-EntraUserReport {
                 }
             }
         }
-        ## Assigned licenses. Pulls SKUs via Graph then converts to friendly name using the helper file
+        ## Retrieve assigned licenses. Pulls SKU ID via Graph then converts to friendly name using the helper file
         $licenses = @()
         foreach ($sku in $user.AssignedLicenses.SKUID) {
             $licenses += ($skusMappingTable | Where-Object { $_.GUID -eq "$sku" } | Select-Object -expand DisplayName -Unique)
@@ -323,131 +371,103 @@ function Get-EntraUserReport {
             DisplayName       = $user.DisplayName
             UserPrincipalName = $upn
         }
-        ## Manager
-        if ( $IncludeManager ) {
-            try {
-                $manager = Get-MgUserManager -UserId $User.Id -ErrorAction Stop
-            } catch {
-                # User does not have a manager
-                $null
-            }
-        }
-        
-        <### Source
-        if ( $IncludeDirectoryInfo ) {
-            $source = if ( $user.onPremisesSyncEnabled -eq $True ) { "On-premises" } else { "Cloud only" }
-        }
-        #>
+
 
         ## Optional properties
         # Create a hash table with all optional properties and their computed values
         # Then, for-each loop through them conditionally add the object to the output list object
         $optionalProperties = @(
             @{
-                Name    = 'UserType'  
+                Name    = 'UserType'
                 Include = $IncludeDirectoryInfo
                 Value   = $user.UserType
             },
             @{
-                Name    = 'Enabled'  
+                Name    = 'Enabled'
                 Include = $IncludeDirectoryInfo
                 Value   = $user.AccountEnabled
             },
             @{
-                Name    = 'Source'  
+                Name    = 'Source'
                 Include = $IncludeDirectoryInfo
                 Value   = if ( $user.onPremisesSyncEnabled -eq $True ) { "On-premises" } else { "Cloud only" }
             },
             @{
-                Name    = 'Mail'  
+                Name    = 'Mail'
                 Include = $IncludeMailboxInfo
                 Value   = $user.Mail
             },
             @{
-                Name    = 'SharedMailbox'  
+                Name    = 'SharedMailbox'
                 Include = $IncludeMailboxInfo
                 Value   = $mailboxLookup[$upn].RecipientTypeDetails -eq 'SharedMailbox'
             },
             @{
-                Name    = 'MailboxName'  
+                Name    = 'MailboxName'
                 Include = $IncludeMailboxInfo
                 Value   = $mailboxLookup[$upn].Alias
             },
             @{
-                Name    = 'MailboxAliases'  
+                Name    = 'MailboxAliases'
                 Include = $IncludeMailboxInfo
                 Value   = ($mailboxLookup[$upn].EmailAddresses | Where-Object { $_ -match '^smtp:' } | ForEach-Object { $_ -split ':' | Select-Object -Last 1 }) -join "; "
             },
             @{
-                Name    = 'LastLogin'  
+                Name    = 'LastLogin'
                 Include = $IncludeLoginActivity
                 Value   = $lastLogin
             },
             @{
                 Name    = 'InactiveDays'
-                Include = $IncludeLoginActivity      	
+                Include = $IncludeLoginActivity
                 Value   = $inactiveDays
             },
             @{
                 Name    = 'PasswordNeverExpires'
-                Include = $IncludePasswordInfo    	
+                Include = $IncludePasswordInfo
                 Value   = $pwNeverExpires
             },
             @{
                 Name    = 'PasswordExpired'
-                Include = $IncludePasswordInfo    	
+                Include = $IncludePasswordInfo
                 Value   = $pwExpired
             },
             @{
                 Name    = 'LastPasswordChange'
-                Include = $IncludePasswordInfo    	
+                Include = $IncludePasswordInfo
                 Value   = $pwLastChanged
             },
             @{
                 Name    = 'PasswordExpiresOn'
-                Include = $IncludePasswordInfo    	
-                Value   = $pwExpiresOn 
+                Include = $IncludePasswordInfo
+                Value   = $pwExpiresOn
             },
             @{
                 Name    = 'DaysSincePwChange'
-                Include = $IncludePasswordInfo    	
-                Value   = if ( $user.LastPasswordChangeDateTime ) { 
+                Include = $IncludePasswordInfo
+                Value   = if ( $user.LastPasswordChangeDateTime ) {
                     (New-TimeSpan -Start $user.LastPasswordChangeDateTime).Days
                 } else { "N/A" }
             },
             @{
                 Name    = 'Licenses'
-                Include = $IncludeLicenses      	
+                Include = $IncludeLicenses
                 Value   = $licenses -join "; "
             },
             @{
                 Name    = 'CompanyName'
-                Include = $IncludeEmploymentCompanyInfo      	
+                Include = $IncludeEmploymentCompanyInfo
                 Value   = $user.CompanyName
             },
             @{
                 Name    = 'Department'
-                Include = $IncludeEmploymentCompanyInfo      	
+                Include = $IncludeEmploymentCompanyInfo
                 Value   = $user.Department
             },
             @{
                 Name    = 'JobTitle'
-                Include = $IncludeEmploymentCompanyInfo      	
+                Include = $IncludeEmploymentCompanyInfo
                 Value   = $user.JobTitle
-            },
-            @{
-                Name    = 'ManagerName'
-                Include = $IncludeManager      	
-                Value   = if ( $null -ne $manager ) {
-                    $manager.AdditionalProperties.displayName
-                }
-            },
-            @{
-                Name    = 'ManagerEmail'
-                Include = $IncludeManager      	
-                Value   = if ( $null -ne $manager ) {
-                    $manager.AdditionalProperties.mail
-                }
             },
             @{
                 Name    = 'EmployeeId'
@@ -464,7 +484,7 @@ function Get-EntraUserReport {
                 Include = $IncludeEmploymentCompanyInfo
                 Value   = if ( $User.EmployeeHireDate ) {
                     (Get-Date ($User.EmployeeHireDate) -Format "MM/dd/yyyy")
-                }                
+                }
             },
             @{
                 Name    = 'Created'
@@ -472,39 +492,53 @@ function Get-EntraUserReport {
                 Value   = $User.createdDateTime
             },
             @{
+                Name    = 'ManagerName'
+                Include = $IncludeManager
+                Value   = if ( $null -ne $managersLookup[$user.Id] ) {
+                    $managersLookup[$user.Id].displayName
+                }
+            },
+            @{
+                Name    = 'ManagerEmail'
+                Include = $IncludeManager
+                Value   = if ( $null -ne $managersLookup[$user.Id] ) {
+                    $managersLookup[$user.Id].mail
+                }
+            },
+            @{
                 Name    = 'StreetAddress'
-                Include = $IncludeContactInfo      	
+                Include = $IncludeContactInfo
                 Value   = $user.StreetAddress
             },
             @{
                 Name    = 'City'
-                Include = $IncludeContactInfo      	
+                Include = $IncludeContactInfo
                 Value   = $user.City
             },
             @{
                 Name    = 'State'
-                Include = $IncludeContactInfo      	
+                Include = $IncludeContactInfo
                 Value   = $user.State
             },
             @{
                 Name    = 'Country'
-                Include = $IncludeContactInfo  	
+                Include = $IncludeContactInfo
                 Value   = $user.Country
             },
             @{
-                Name    = 'Roles'
-                Include = $IncludeEntraRoles  	
-                Value   = ($allRoleMemberships | Where-Object { $_.Member -like $upn } | Sort-Object | Select-Object -ExpandProperty role) -join ", "
-            },
-            @{
                 Name    = 'BusinessPhones'
-                Include = $IncludeContactInfo   	
+                Include = $IncludeContactInfo
                 Value   = $user.BusinessPhones
             },
             @{
                 Name    = 'TeamsNumber'
-                Include = $IncludeContactInfo   	
+                Include = $IncludeContactInfo
                 Value   = $teamsNumLookup[$upn].LineUri
+            },
+            @{
+                Name    = 'Roles'
+                Include = $IncludeEntraRoles
+                Value   = ($allRoleMemberships | Where-Object { $_.Member -like $upn } | Sort-Object | Select-Object -ExpandProperty role) -join ", "
             }
         )
         foreach ($property in $optionalProperties) {
@@ -519,19 +553,7 @@ function Get-EntraUserReport {
     $results = $results | Sort-Object DisplayName
     Out-SKSolutionReport -Content $results -ReportTitle $reportTitle -ReportFooter $reportFooter -SeparateReportFileForEachCustomer
     if ( $IncludeM365LicenseReport ) {
-        Get-M365LicenseReportBeta -UnderallocatedSKUsOnly $false -Clients $customerContext -Scope 'All' 
-    }
-    
-    ### OUTPUT TIMESTAMP
-    $end = Get-Date
-    $startFormatted = $start.ToString("yyyy-MM-dd HH:mm:ss")
-    $endFormatted = $end.ToString("yyyy-MM-dd HH:mm:ss")
-    $duration = New-TimeSpan -Start $today -End $end
-    Write-Host "Script started at $startFormatted"
-    if ($duration.TotalMinutes -lt 1) {
-        Write-Host "Script finished at $endFormatted. Duration: $($duration.Seconds) seconds."
-    } else {
-        Write-Host "Script finished at $endFormatted. Duration: $($duration.Minutes) minutes and $($duration.Seconds) seconds."
+        Get-M365LicenseReportBeta -UnderallocatedSKUsOnly $false -Clients $customerContext -Scope 'All'
     }
 
 }
