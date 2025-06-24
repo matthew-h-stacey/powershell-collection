@@ -182,6 +182,8 @@ function Get-EntraUserReport {
     $properties = @(
         # Identity
         "id"
+        "givenName"
+        "surname"
         "displayName"
         "userPrincipalName"
         "mail"
@@ -368,10 +370,11 @@ function Get-EntraUserReport {
         }
         ## Initial hash table
         $userHashTable = [ordered]@{
+            GivenName         = $user.givenName
+            Surname           = $user.surname
             DisplayName       = $user.DisplayName
             UserPrincipalName = $upn
         }
-
 
         ## Optional properties
         # Create a hash table with all optional properties and their computed values
@@ -492,16 +495,16 @@ function Get-EntraUserReport {
                 Value   = $User.createdDateTime
             },
             @{
-                Name    = 'ManagerName'
+                Name    = 'Manager'
                 Include = $IncludeManager
-                Value   = if ( $null -ne $managersLookup[$user.Id] ) {
+                Value   = if ( $IncludeManager -and $null -ne $managersLookup[$user.Id] ) {
                     $managersLookup[$user.Id].displayName
                 }
             },
             @{
                 Name    = 'ManagerEmail'
                 Include = $IncludeManager
-                Value   = if ( $null -ne $managersLookup[$user.Id] ) {
+                Value   = if ( $IncludeManager -and $null -ne $managersLookup[$user.Id] ) {
                     $managersLookup[$user.Id].mail
                 }
             },
