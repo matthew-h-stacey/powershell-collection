@@ -7,7 +7,6 @@
 # Add the following before other script execution
 
 if (([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) -eq $False) {
-    Write-Warning "Script requires Administrator access. Re-run as Administrator"
-    Read-Host -Prompt “Press Enter to exit”
+    Write-Error "Script requires Administrator access. Re-run as Administrator"
     break
 }
