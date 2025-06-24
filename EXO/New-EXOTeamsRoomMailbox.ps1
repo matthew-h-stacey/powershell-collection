@@ -32,13 +32,15 @@ function New-EXOTeamsRoomMailbox {
     The capacity of this conference room
 
     .NOTES
-    Reference https://learn.microsoft.com/en-us/microsoftteams/rooms/create-resource-account?tabs=exchange-online%2Cgraph-powershell-password for additional information
+    Reference:
+    https://learn.microsoft.com/en-us/microsoftteams/rooms/create-resource-account?tabs=exchange-online%2Cgraph-powershell-password
+    https://learn.microsoft.com/en-us/exchange/recipients/room-mailboxes?view=exchserver-2019&preserve-view=true#use-the-exchange-management-shell-to-create-a-room-list
     #>
 
     [SkyKickCommand(DisplayName = "Set Parameter Sections", Sections = { "Basic Details", "Room location", "Password" })]
     param (
         [SkyKickParameter(
-                DisplayName = "UserPrincipalName",    
+                DisplayName = "UserPrincipalName",
                 Section = "Basic Details",
                 DisplayOrder = 1,
                 HintText = "Enter the desired UserPrincipalName for the Teams Room user account."
@@ -48,7 +50,7 @@ function New-EXOTeamsRoomMailbox {
         $UserPrincipalName,
 
         [SkyKickParameter(
-            DisplayName = "Alias",    
+            DisplayName = "Alias",
             Section = "Basic Details",
             DisplayOrder = 2,
             HintText = "Enter the desired alias/name for the Teams Room user account."
@@ -58,7 +60,7 @@ function New-EXOTeamsRoomMailbox {
         $Alias,
 
         [SkyKickParameter(
-            DisplayName = "Process external meeting requests",    
+            DisplayName = "Process external meeting requests",
             Section = "Basic Details",
             DisplayOrder = 3,
             HintText = "Enable or disable the ability for external senders to book meetings on this calendar."
@@ -80,7 +82,7 @@ function New-EXOTeamsRoomMailbox {
         )]
         [Parameter (Mandatory = $true)]
         [SecureString]$Password,
-        
+
         [SkyKickParameter(
             DisplayName = "City",
             Section = "Room location",
@@ -140,7 +142,7 @@ function New-EXOTeamsRoomMailbox {
         Name                        = $Alias
         Alias                       = $Alias
         Room                        = $true
-        EnableRoomMailboxAccount    = $true 
+        EnableRoomMailboxAccount    = $true
         RoomMailboxPassword         = $Password
     }
     try {
@@ -197,7 +199,7 @@ function New-EXOTeamsRoomMailbox {
         $locationParams.Capacity = $Capacity
     }
 
-    try { 
+    try {
         Set-Place -Identity $UserPrincipalName @locationParams
     } catch {
         Write-Output "[ERROR] Failed to set location metadata on room mailbox: $UserPrincipalName. Error: $($_.Exception.message)"
