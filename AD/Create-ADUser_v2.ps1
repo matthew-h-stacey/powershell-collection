@@ -3,7 +3,7 @@
 Script to create Active Directory user accounts.
 
 .DESCRIPTION
-This script combines a few functions to easily create new Active Directory user accounts in bulk using a CSV filled out with the required properties. 
+This script combines a few functions to easily create new Active Directory user accounts in bulk using a CSV filled out with the required properties.
 
 .\Create-ADUser_template.csv - Template file for entering user properties into.
 
@@ -13,7 +13,7 @@ Date:   June 26, 2024
 #>
 
 function New-Folder {
-    
+
     <#
     .SYNOPSIS
     Determine if a folder already exists, or create it  if not.
@@ -38,16 +38,16 @@ function New-Folder {
 }
 
 function Write-Log {
-    
+
     <#
     .SYNOPSIS
     Log to a specific file/folder path with timestamps
 
     .EXAMPLE
     Write-Log -Message "[INFO] Attempting to do the thing" -LogFile C:\Scripts\MyScript.log
-    Write-Log -Message "[INFO] Attempting to do the thing" -LogFile $LogFile 
+    Write-Log -Message "[INFO] Attempting to do the thing" -LogFile $LogFile
     #>
-    
+
     param (
         [Parameter(Mandatory = $true)]
         [String]
@@ -114,7 +114,7 @@ function Get-CultureInfoList {
         }
     }
     $cultures
-    
+
 }
 
 function Find-ADUser {
@@ -237,7 +237,7 @@ function Copy-ADGroupMembership {
             }
         }
     }
-}   
+}
 
 function Set-ADUserAliases {
 
@@ -273,7 +273,7 @@ function Set-ADUserAliases {
 
     if ( $LogFile ) {
         Write-Log -Message "[INFO] Starting to process aliases" -LogFile $logFile
-    } 
+    }
 
     # Add the PrimarySmtpAddress (SMTP) to the proxyAddresses property
     $EmailSMTP = "SMTP:" + $PrimarySmtpAddress
@@ -285,7 +285,7 @@ function Set-ADUserAliases {
     }
 
     # Add any aliases (smtp) to the proxyAddresses property
-    $Aliases | ForEach-Object { 
+    $Aliases | ForEach-Object {
         $AliasSMTP = "smtp:" + $_
         try {
             Set-ADUser -Identity $Identity -Add @{proxyAddresses = $AliasSMTP }
@@ -356,9 +356,9 @@ function Export-UserProperties {
     # Create an empty array for groups. Grab only the group's display name, sort them, then combine into a single comma-separated string
     $Groups = @()
     $ADUser.MemberOf | ForEach-Object {
-        $Groups += ((($_ -split ",", 2)[0]) -split "=")[1] 
+        $Groups += ((($_ -split ",", 2)[0]) -split "=")[1]
     }
-    $Groups = ($Groups | Sort-Object) -join ", " 
+    $Groups = ($Groups | Sort-Object) -join ", "
 
     # Create a PsCustomObject for the output and send it to OutputPath
     $Output = [PsCustomObject]@{
@@ -401,7 +401,6 @@ function Set-ADUserParams {
     ### Start constructing params with the base parameters from the input file
     $params = @{
         GivenName             = $FirstName
-        Surname               = $LastName
         DisplayName           = $DisplayName
         Name                  = $DisplayName
         samAccountName        = $SamAccountName
@@ -420,7 +419,7 @@ function Set-ADUserParams {
         if ( $countryCode ) {
             Write-Log -Message "[INFO] Matched provided country ($Country) to ISO 3166 two-letter region name: $countryCode" -LogFile $logFile
             $Country = $countryCode
-        
+
         } else {
             Write-Output "[ERROR] Failed to match the provided country ($Country) to an ISO 3166 two-letter region name (example: Mexico -> MX). Please set the country to a valid two-letter region name and try again."
             Write-Log -Message "[ERROR] Failed to match the provided country ($Country) to an ISO 3166 two-letter region name (example: Mexico -> MX)" -LogFile $logFile
@@ -489,7 +488,7 @@ function Set-ADUserParams {
     if ( $otherAttributes.Keys.Count -gt 0 ) { $params.otherAttributes = $otherAttributes }
 
     $params
-    
+
 }
 
 function Start-ADUserCreationWorkflow {
@@ -504,11 +503,6 @@ function Start-ADUserCreationWorkflow {
         [Parameter(Mandatory = $true)]
         [String]
         $FirstName,
-
-        # User's last name
-        [Parameter(Mandatory = $true)]
-        [String]
-        $LastName,
 
         # User's display name. Often just "FirstName LastName" but could include an occupational title, etc.
         [Parameter(Mandatory = $true)]
@@ -534,6 +528,11 @@ function Start-ADUserCreationWorkflow {
         [Parameter(Mandatory = $true)]
         [Boolean]
         $Enabled,
+
+        # User's last name
+        [Parameter(Mandatory = $false)]
+        [String]
+        $LastName,
 
         # To copy properties and group membership from an existing user, enter the source user's SamAccountName/UserPrincipalName/DisplayName
         [Parameter(Mandatory = $false)]
@@ -634,7 +633,7 @@ function Start-ADUserCreationWorkflow {
         [Parameter(Mandatory = $false)]
         [String]
         $Description
-    
+
     )
 
     ### Logging
@@ -672,7 +671,7 @@ function Start-ADUserCreationWorkflow {
 
     # Copy group membership
     if ( $CopyUser ) {
-        Copy-ADGroupMembership -Source $UserToCopy.SamAccountName -Destination $params['SamAccountName'] -LogFile $logFile        
+        Copy-ADGroupMembership -Source $UserToCopy.SamAccountName -Destination $params['SamAccountName'] -LogFile $logFile
     }
 
     Export-UserProperties -Identity $SamAccountName -OutputPath C:\Scripts
@@ -688,6 +687,7 @@ $defaultCsvPath = ".\Create-ADUser_template.csv"
 # Once found, loop through each of the users and run the function to start the creation workflow
 if ( Test-Path $defaultCsvPath) {
     $csvPath = $defaultCsvPath
+    Write-Host "Located CSV at default path ($csvPath)"
 } else {
     $csvPath = Read-Host "Please type the folder/file path for the CSV file for bulk creation of Active Directory users (example: C:\Scripts\Create-ADUser_template.csv)"
     $fileExists = $false
@@ -699,20 +699,20 @@ if ( Test-Path $defaultCsvPath) {
         }
     }
     Write-Output "[CSV] Found CSV file for bulk user creation: $csvPath. Proceeding ..."
-    $users = Import-Csv -Path $csvPath
+}
+$users = Import-Csv -Path $csvPath
 foreach ($user in $users) {
         # Initialize an empty hashtable for parameters
         $params = @{}
         # Mandatory parameters
         $params.FirstName = $user.FirstName
-        $params.LastName = $user.LastName
         $params.DisplayName = $user.DisplayName
         $params.SamAccountName = $user.SamAccountName
         $params.UserPrincipalName = $user.UserPrincipalName
         $params.ChangePasswordAtLogon = [System.Convert]::ToBoolean($user.ChangePasswordAtLogon)
         $params.Enabled = [System.Convert]::ToBoolean($user.Enabled)
         # Loop through $optionalParams and add the properties to $params if present in $user
-        $optionalParams = @('CopyUser', 'Email', 'Alias', 'Title', 'Department', 'Manager', 'Company', 'EmployeeID', 'StreetAddress', 'Office', 'City', 'State', 'postalCode', 'Country', 'Mobile', 'Fax', 'HomePhone', 'IpPhone', 'Pager', 'Description')
+        $optionalParams = @('LastName','CopyUser', 'Email', 'Alias', 'Title', 'Department', 'Manager', 'Company', 'EmployeeID', 'StreetAddress', 'Office', 'City', 'State', 'postalCode', 'Country', 'Mobile', 'Fax', 'HomePhone', 'IpPhone', 'Pager', 'Description')
         foreach ($paramName in $optionalParams) {
             if ($user.$paramName) {
                 $params.$paramName = $user.$paramName
@@ -729,4 +729,3 @@ foreach ($user in $users) {
         }
         Start-ADUserCreationWorkflow @trimmedParams
     }
-}
