@@ -23,10 +23,15 @@ param (
     [string]
     $PrimarySmtpAddress,
 
-    # Optional user to grant full control to
+    # Optional: user to grant full control to. In a CSV, separate multiple users with a semicolon
     [Parameter(Mandatory = $false)]
-    [string]
+    [string[]]
     $Trustee,
+
+    # Optional: grant Trustee send-as permissions
+    [Parameter(Mandatory = $false)]
+    [string[]]
+    $SendAs,
 
     # Hide from the GAL
     [Parameter(Mandatory = $false)]
@@ -55,7 +60,7 @@ if ($Room) {
 
 # Attempt to create the mailbox
 try {
-    New-Mailbox @params
+    New-Mailbox @params | Out-Null
     Write-Output "[INFO] Successfully created $PrimarySmtpAddress"
 } catch {
     Write-Output "[ERROR] Failed to create $PrimarySmtpAddress. Error: $($_.Exception.Message)"  -ErrorAction Stop
@@ -64,16 +69,26 @@ try {
 
 # Optional: Grant user FullAccess to new mailbox
 if ($Trustee){
-    try { 
-        $isValid = Get-Mailbox $Trustee -ErrorAction Stop
-    } catch {
-        Write-Output "[ERROR] Failed to locate mailbox for $Trustee. Unable to grant FullAccess to $PrimarySmtpAddress"
-    }
-    if ( $isValid ) {
+    $trusteeArray = $Trustee -split ";"
+    foreach ( $t in $trusteeArray ) {
         try {
-            Add-MailboxPermission -Identity $PrimarySmtpAddress -User $Trustee -AccessRights FullAccess -ErrorAction Stop
+            $isValid = Get-Mailbox $t -ErrorAction Stop
         } catch {
-            Write-Output "[ERROR] Failed to grant $Trustee FullAccess to $PrimarySmtpAddress. Error: $($_.Exception.Message)"
+            Write-Output "[ERROR] Failed to locate mailbox for $t. Unable to grant FullAccess to $PrimarySmtpAddress"
+        }
+        if ( $isValid ) {
+            try {
+                Add-MailboxPermission -Identity $PrimarySmtpAddress -User $t -AccessRights FullAccess -ErrorAction Stop | Out-Null
+                Write-Output "[INFO] Successfully granted $t FullAccess to $PrimarySmtpAddress"
+            } catch {
+                Write-Output "[ERROR] Failed to grant $t FullAccess to $PrimarySmtpAddress. Error: $($_.Exception.Message)"
+            }
+            try {
+                Add-RecipientPermission -Identity $PrimarySmtpAddress -Trustee $t -AccessRights SendAs -Confirm:$false -ErrorAction Stop | Out-Null
+                Write-Output "[INFO] Successfully granted $t SendAs permissions for $PrimarySmtpAddress"
+            } catch {
+                Write-Output "[ERROR] Failed to grant $t FullAccess to $PrimarySmtpAddress. Error: $($_.Exception.Message)"
+            }
         }
     }
 }
