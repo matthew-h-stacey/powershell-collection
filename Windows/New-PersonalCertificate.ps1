@@ -1,6 +1,31 @@
 # Creates an RSA 4096-bit self-signed certificate with the naming format {UserName}-{HostName}
+function New-Folder {
+
+    <#
+    .SYNOPSIS
+    Determine if a folder already exists, or create it  if not.
+
+    .EXAMPLE
+    New-Folder C:\TempPath
+    #>
+
+    param(
+        [Parameter(Mandatory = $True)]
+        [String]
+        $Path
+    )
+    if (-not (Test-Path -LiteralPath $Path)) {
+        try {
+            New-Item -Path $Path -ItemType Directory -ErrorAction Stop | Out-Null
+        } catch {
+            Write-Error -Message "Unable to create directory '$Path'. Error was: $_" -ErrorAction Stop
+        }
+    }
+
+}
 
 $workDir = "C:\TempPath" # Output of public key
+New-Folder -Path $workDir
 $certName = [System.Environment]::UserName + "_" + [System.Environment]::MachineName
 
 # Create certificate
@@ -14,5 +39,3 @@ Write-host "Exported public key to $workDir\$($certName).cer"
 $mycert | select Thumbprint
 
 # Finally, upload the cer to the App Registration in Azure AD
-
-
