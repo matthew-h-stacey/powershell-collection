@@ -24,7 +24,7 @@ Record changes but don't actually make them
 .EXAMPLE
 Sample execution
 1) Create and populate a CSV (C:\TempPath\input.csv) with the headers: UserPrincipalName,DisplayName,Department,JobTitle,EmployeeId
-2) Execute: 
+2) Execute:
 Connect-MgGraph -scopes User.ReadWrite.All
 Update-EntraIDUserProperties.ps1 -CsvPath C:\TempPath\input.csv -UserIdentifier UserPrincipalName -ExportPath C:\TempPath
 3) Review output in ExportPath
@@ -95,7 +95,7 @@ function Update-Property {
     )
 
     # Take specific action based on the property
-    # - Updating Manager requires usage of Set-MgUserManagerByRef 
+    # - Updating Manager requires usage of Set-MgUserManagerByRef
     # - Updating extensionAttributes requires updating -AdditionalProperties with a hash table object
     # - All other variables that can be directly passed to Update-MgUser are passed to Update-MgUser
     switch ($Property) {
@@ -142,7 +142,7 @@ function Update-Property {
 
             # First, retrieve the current/old value
             $oldValue = $UserObject.OnPremisesExtensionAttributes.$Property
-            if (!$oldValue) { 
+            if (!$oldValue) {
                 $oldValue = "N/A"
             }
             # Compare the current value to the provided one
@@ -175,7 +175,7 @@ function Update-Property {
             # This portion of the switch is for all other generic properties that are set via Update-MgUser (ex: Department, JobTitle, etc.)
             # First, retrieve the current/old value
             $oldValue = $UserObject.$property
-            if (!$oldValue) { 
+            if (!$oldValue) {
                 $oldValue = "N/A"
             }
             # Compare the current value to the provided one
@@ -187,19 +187,19 @@ function Update-Property {
                 $params = @{
                     $Property = $NewValue
                 }
-                try {
-                    if ( $WhatIf) {
-                        Write-Output "[INFO][WHATIF] $($UserObject.UserPrincipalName): $Property updated from $oldValue -> $NewValue"
-                    } else {
-                        Update-MgUser -UserId $UserObject.UserPrincipalName @params
+                if ( $WhatIf) {
+                    Write-Output "[INFO][WHATIF] $($UserObject.UserPrincipalName): $Property updated from $oldValue -> $NewValue"
+                } else {
+                    try {
+                        Update-MgUser -UserId $UserObject.UserPrincipalName @params -ErrorAction Stop
                         Write-Output "[INFO] $($UserObject.UserPrincipalName): $Property updated from $oldValue -> $NewValue"
+                        $changed = $True
+                    } catch {
+                        $errorMessage = "[ERROR] $($UserObject.UserPrincipalName): Failed to update $property. Error: $($_.Exception.Message)"
+                        Write-Output $errorMessage
+                        $errorLog.Add($errorMessage)
+                        $changed = $False
                     }
-                    $changed = $True
-                } catch {
-                    $errorMessage = "[ERROR] $($UserObject.UserPrincipalName): Failed to update $property. Error: $($_.Exception.Message)"
-                    Write-Output $errorMessage
-                    $errorLog.Add($errorMessage)
-                    $changed = $False
                 }
             }
         }
@@ -253,14 +253,14 @@ function Start-PropertyUpdateWorkflow {
     # NOTE: The input file may reference an attribute like extensionAttribute1, but the property to pull those values is OnPremisesExtensionAttributes
 
     # This variable is used to track which properties need to be changed
-    $propsExclIdentifier = $csvUsers | Get-Member -MemberType NoteProperty | Where-Object { $_.Name -notLike $userIdentifier } | Select-Object -ExpandProperty Name 
+    $propsExclIdentifier = $csvUsers | Get-Member -MemberType NoteProperty | Where-Object { $_.Name -notLike $userIdentifier } | Select-Object -ExpandProperty Name
 
     # This variable is used to select the user and relevant properties
     $propsInclIdentifier = $csvUsers | Get-Member -MemberType NoteProperty | Select-Object -ExpandProperty Name
     if ( $propsInclIdentifier -contains "OnPremisesExtensionAttributes" ) {
         $selectedProps = $propsInclIdentifier | Where-Object {$_ -notLike "extensionAttribute*"}
     } else {
-        $selectedProps = $propsInclIdentifier | Where-Object { $_ -notLike "extensionAttribute*" } 
+        $selectedProps = $propsInclIdentifier | Where-Object { $_ -notLike "extensionAttribute*" }
         $selectedProps += "OnPremisesExtensionAttributes"
     }
 
@@ -277,27 +277,27 @@ function Start-PropertyUpdateWorkflow {
             if (!($SkipBackup)) {
                 # Store the properties of the users before proceeding
                 $userProps = [ordered]@{}
-                foreach ($property in $mgUser.psobject.properties) {                
+                foreach ($property in $mgUser.psobject.properties) {
                     if ( $property.Value -is [System.String[]]) {
                         $userProps[$property.Name] = $property.Value -join ', '
                     } else {
-                        $userProps[$property.Name] = $property.Value                    
+                        $userProps[$property.Name] = $property.Value
                     }
                 }
                 $backup += New-Object PSObject -Property $userProps
-            }            
+            }
         } catch {
-            Write-Output "[WARNING] $($userId): SKIPPED, unable to find an Entra ID user using provided the identifier"    
+            Write-Output "[WARNING] $($userId): SKIPPED, unable to find an Entra ID user using provided the identifier"
             $skippedUsers.Add($userId)
             continue
         }
     }
-    if ( $backup ) {        
+    if ( $backup ) {
         $backup | Export-Csv $backupFile -NoTypeInformation
         Write-Output "[INFO] Exported user property backup to: $backupFile"
     }
 
-    
+
 
     # Iterate over the properties to update. Only overwrite user properties with blank values if $OverwriteBlankValue is used. Otherwise, only update properties that have values in the CSV
     foreach ($user in $csvUsers) {
@@ -317,7 +317,7 @@ function Start-PropertyUpdateWorkflow {
     }
 
 
-    
+
 }
 
 function Export-Results {
@@ -329,19 +329,26 @@ function Export-Results {
         $skippedUsers | Out-File $skippedUsersOutput
         Write-Output "[INFO] Some users were skipped, please review $skippedUsersOutput. Users may not have been matched with the specified UserIdentifier"
     }
-    if ( $errorLog ) { 
+    if ( $errorLog ) {
         $errorLog | Out-File $errorLogOutput
         Write-Output "[INFO] Error log exported to: $errorLogOutput"
     }
 }
 
+$ErrorActionPreference = "Stop"
+$isConnected = Get-MgContext
+if ( -not $isConnected) {
+    Write-Output "[ERROR] Not connected to Microsoft Graph. Please run Connect-MgGraph and try again"
+    exit 1
+}
+
 ############ Variables #############
 
 # Report name/location
-$resultsOutput = "$ExportPath\EntraID_user_property_changes_$((Get-Date -Format "MM-dd-yyyy_HHmm")).csv"
-$skippedUsersOutput = "$ExportPath\EntraID_user_property_changes_skippedUsers_$((Get-Date -Format "MM-dd-yyyy_HHmm")).txt"
-$errorLogOutput = "$ExportPath\EntraID_user_property_changes_errors_$((Get-Date -Format "MM-dd-yyyy_HHmm")).txt"
-$backupFile = "$ExportPath\EntraID_user_property_backup_$((Get-Date -Format "MM-dd-yyyy_HHmm")).csv"
+$resultsOutput = Join-Path $ExportPath "EntraID_user_property_changes_$((Get-Date -Format "MM-dd-yyyy_HHmm")).csv"
+$skippedUsersOutput = Join-Path $ExportPath "EntraID_user_property_changes_skippedUsers_$((Get-Date -Format "MM-dd-yyyy_HHmm")).txt"
+$errorLogOutput = Join-Path $ExportPath "EntraID_user_property_changes_errors_$((Get-Date -Format "MM-dd-yyyy_HHmm")).txt"
+$backupFile = Join-Path $ExportPath "EntraID_user_property_backup_$((Get-Date -Format "MM-dd-yyyy_HHmm")).csv"
 
 # Empty lists to store results
 $results = New-Object System.Collections.Generic.List[System.Object]
