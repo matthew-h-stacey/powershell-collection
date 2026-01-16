@@ -13,7 +13,6 @@ The purpose of this script is to perform an initial cleanup/configuration of an 
 The prime directive is to clean up fresh installs that do not yet have GPOs in place, though it could be used with care on existing domains
 
 TO DO:
-* Find why redircmp/redirusr cannot properly finish on the first time the script is run (NOTE: Find why $newDefault(User/Computers)Container is blank to begin with), but runs fine on second attempt
 * General script cleanup/readability improvements
 * Find out how to turn the CreateOU function into a function that accepts arrays, to call the function one time only?
 * Move disabled computers and accounts into the new Disabled OUs
@@ -30,10 +29,6 @@ Import-Module ActiveDirectory
 $getCurrentDomainRoot = Get-ADDomain | ForEach-Object { $_.DistinguishedName }
 $getDomain = $env:userdomain
 $getNewDomainRoot = "OU=$getDomain"+","+"$getCurrentDomainRoot"
-$currentDefaultComputersContainer = (Get-ADDomain | Select-Object -ExpandProperty ComputersContainer)
-$newDefaultComputersContainer = (Get-ADOrganizationalUnit -Filter * | Where-Object {$_.Name -like "Computers" -and $_.DistinguishedName -like "*$getNewDomainRoot"} | ForEach-Object {$_.DistinguishedName})
-$currentDefaultUsersContainer = Get-ADDomain | Select-Object -ExpandProperty UsersContainer
-$newDefaultUsersContainer = (Get-ADOrganizationalUnit -Filter * | Where-Object {$_.Name -like "Users" -and $_.DistinguishedName -like "*$getNewDomainRoot"} | ForEach-Object {$_.DistinguishedName})
 
 ###
 ### Establish functions
@@ -66,6 +61,10 @@ CreateOU "Users" (Get-ADOrganizationalUnit -Filter {Name -like "Disabled"}| ForE
 ###
 ### Redirect users and computers
 ###
+$currentDefaultComputersContainer = (Get-ADDomain | Select-Object -ExpandProperty ComputersContainer)
+$newDefaultComputersContainer = (Get-ADOrganizationalUnit -Filter * | Where-Object { $_.Name -like "Computers" -and $_.DistinguishedName -like "*$getNewDomainRoot" } | ForEach-Object { $_.DistinguishedName })
+$currentDefaultUsersContainer = Get-ADDomain | Select-Object -ExpandProperty UsersContainer
+$newDefaultUsersContainer = (Get-ADOrganizationalUnit -Filter * | Where-Object { $_.Name -like "Users" -and $_.DistinguishedName -like "*$getNewDomainRoot" } | ForEach-Object { $_.DistinguishedName })
 
 if($newDefaultComputersContainer -ne $currentDefaultComputersContainer){
     Write-Host "Computers needs to be redirected ..."
@@ -117,10 +116,10 @@ if(!$cnComputers)
 
 foreach($computer in $cnComputers){
 
-    if(!(Move-ADObject $computer -TargetPath (Get-ADOrganizationalUnit -SearchBase $getNewDomainRoot -Filter {Name -like "Computers"}| ForEach-Object {$_.DistinguishedName}))) 
-        { $Status = "SUCCESS" } 
+    if(!(Move-ADObject $computer -TargetPath (Get-ADOrganizationalUnit -SearchBase $getNewDomainRoot -Filter {Name -like "Computers"}| ForEach-Object {$_.DistinguishedName})))
+        { $Status = "SUCCESS" }
 
-        else 
+        else
         { $Status = "FAILED" }
 
         $objectOutput = New-Object -TypeName PSobject
