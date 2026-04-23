@@ -1,6 +1,8 @@
 param(
     # Parameter help description
-    [Parameter(Mandatory = $true)][ParameterType]$UserIdentifier # This variable should equate to the Header in the CSV file that is used as the user Identifier (ex: DisplayName, UserPrincipalName) - i.e, NOT a property to be changed
+    [Parameter(Mandatory = $true)]
+    [string]
+    $UserIdentifier # This variable should equate to the Header in the CSV file that is used as the user Identifier (ex: DisplayName, UserPrincipalName) - i.e, NOT a property to be changed
 )
 
 # NOTE: To keep this code simple, make sure the headers of the CSV match the user object attribute in Active Directory
@@ -45,7 +47,7 @@ foreach ( $u in $users) {
             Add-Member -InputObject $userProperties -MemberType NoteProperty -Name $p -Value $adUser.$p
             Write-Host "$($adUser.DisplayName) - Adding property $($p): $($adUser.$p)"
         }
-        $results += $userProperties   
+        $results += $userProperties
     }
 
 }
@@ -77,7 +79,7 @@ foreach ($u in $users) {
     #if ($u.OfficePhone) { $adUser | Set-ADUser -OfficePhone $u.OfficePhone } else { $adUser | Set-ADUser -OfficePhone  ' ' }
     #if ($u.office) { $adUser | Set-ADUser -Office $u.Office } else { $adUser | Set-ADUser -Office ' ' }
     if ($u.title) { $adUser | Set-ADUser -Title $u.Title } else { $adUser | Set-ADUser -Title ' ' }
-    if ($u.Manager) { 
+    if ($u.Manager) {
         $ManagerDisplayName = $u.Manager
         $Manager = Get-ADUser -Filter { DisplayName -like $ManagerDisplayName }
         try {
