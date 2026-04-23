@@ -11,11 +11,11 @@ For Active Directory user changes, use "ActiveDirectory." For Entra ID user chan
 Full file/folder path of the CSV
 
 .PARAMETER UserIdentifier
-This is the user identifier in the CSV file. 
+This is the user identifier in the CSV file.
 Typically, this should be UserPrincipalName or PrimarySmtpAddress
 
 .PARAMETER ManagerIdentifier
-Optional parameter for cases when a Manager column is provided but the content is a different format from UserIdentifier. 
+Optional parameter for cases when a Manager column is provided but the content is a different format from UserIdentifier.
 For example, UserIdentifier may be UserPrincipalName but display names are used in the Manager column.
 In that case, ManagerIdentifier should be "DisplayName"
 
@@ -35,7 +35,7 @@ Record changes but don't actually make them
 .EXAMPLE
 Sample execution
 1) Create and populate a CSV (C:\TempPath\input.csv) with the headers: UserPrincipalName,DisplayName,Department,JobTitle,EmployeeId
-2) Execute: 
+2) Execute:
 Connect-MgGraph -scopes User.ReadWrite.All
 Update-UserProperties.ps1 -CsvPath C:\TempPath\input.csv -UserIdentifier UserPrincipalName -ExportPath C:\TempPath
 3) Review output in ExportPath
@@ -60,7 +60,7 @@ param (
     $UserIdentifier,
 
     [Parameter(Mandatory = $false)]
-    [ValidateSet("DisplayName","UserPrincipalName")]
+    [ValidateSet("DisplayName", "UserPrincipalName")]
     [string]
     $ManagerIdentifier,
 
@@ -85,10 +85,10 @@ function Get-ADUserByIdentifier {
     <#
     .SYNOPSIS
     Dynamically get an AD user based on provided Identity and Identifier
-    
+
     .PARAMETER Identity
     The value used to search for an Active Directory user
-    
+
     .PARAMETER UserIdentifier
     The property to use when searching for the Active Directory user
 
@@ -102,7 +102,7 @@ function Get-ADUserByIdentifier {
         $Identity,
 
         [Parameter(Mandatory = $true)]
-        [ValidateSet("DisplayName","Mail","UserPrincipalName")]
+        [ValidateSet("DisplayName", "Mail", "UserPrincipalName")]
         [string]
         $UserIdentifier,
 
@@ -128,7 +128,7 @@ function Get-ADUserByIdentifier {
     } else {
         $userObj = Get-ADUser -Filter $filter
     }
-    
+
     return $userObj
 }
 
@@ -162,20 +162,21 @@ function Update-Property {
         $Property,
 
         [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
         [string]
         $NewValue
     )
 
     # Take specific action based on the property
-    # - Updating Manager requires usage of Set-MgUserManagerByRef 
+    # - Updating Manager requires usage of Set-MgUserManagerByRef
     # - Updating extensionAttributes requires updating -AdditionalProperties with a hash table object
     # - All other variables that can be directly passed to Update-MgUser are passed to Update-MgUser
-    
+
+    Write-Output "[INFO] Processing $($UserObject.UserPrincipalName) - Property: $Property, New Value: $NewValue"
     switch ($Property) {
         "Manager" {
-            # Updating a user's manager in Entra requires a separate cmdlet than Update-MgUser
             if ( $DirectoryType -eq "ActiveDirectory" ) {
-                # Retrieve the current/old Manager UPN. If there is no Manager, set the value to "N/A"       
+                # Retrieve the current/old Manager UPN. If there is no Manager, set the value to "N/A"
                 if ( $UserObject.Manager ) {
                     $currentManager = Get-ADUser $UserObject.Manager | Select-Object -ExpandProperty userprincipalname
                     $oldValue = $currentManager
@@ -184,7 +185,11 @@ function Update-Property {
                 }
 
                 # Locate the new manager user object
-                $newManager = Get-ADUserByIdentifier -Identity $NewValue -UserIdentifier $ManagerIdentifier
+                if ( [string]::IsNullOrWhiteSpace($NewValue) ) {
+                    $newManager = $null
+                } else {
+                    $newManager = Get-ADUserByIdentifier -Identity $NewValue -UserIdentifier $ManagerIdentifier
+                }
 
                 # If there is no change to manager, do nothing. Otherwise, change the manager to the new value
                 if ( $newManager.UserPrincipalName -eq $oldValue) {
@@ -196,8 +201,15 @@ function Update-Property {
                         if ( $WhatIf) {
                             Write-Output "[INFO][WHATIF] $($UserObject.UserPrincipalName): Manager updated from $oldValue -> $($newManager.UserPrincipalName)"
                         } else {
-                            $UserObject | Set-ADUser -Manager $newManager.DistinguishedName
-                            Write-Output "[INFO] $($UserObject.UserPrincipalName): Manager updated from $oldValue -> $($newManager.UserPrincipalName)"
+                            if ($null -eq $NewValue) {
+                                # If the new value is null or empty, clear the manager attribute
+                                $UserObject | Set-ADUser -Clear Manager
+                                Write-Output "[INFO] $($UserObject.UserPrincipalName): Manager updated from $oldValue -> (null)"
+                            } else {
+                                # Otherwise, set the manager to the new value
+                                $UserObject | Set-ADUser -Manager $newManager.DistinguishedName
+                                Write-Output "[INFO] $($UserObject.UserPrincipalName): Manager updated from $oldValue -> $($newManager.UserPrincipalName)"
+                            }
                         }
                         $changed = $True
                     } catch {
@@ -207,10 +219,10 @@ function Update-Property {
                         $changed = $False
                     }
                 }
-                
             }
             if ( $DirectoryType -eq "EntraID" ) {
-                # Retrieve the current/old Manager UPN. If there is no Manager, set the value to "N/A"                
+                # Updating a user's manager in Entra requires a separate cmdlet than Update-MgUser
+                # Retrieve the current/old Manager UPN. If there is no Manager, set the value to "N/A"
                 try {
                     $currentManager = Get-MgUserManager -UserId $UserObject.UserPrincipalName -ErrorAction Stop
                     $oldValue = $currentManager.AdditionalProperties.userPrincipalName
@@ -226,7 +238,7 @@ function Update-Property {
                 } elseif ( $ManagerIdentifier -eq "UserPrincipalName" ) {
                     $newManager = Get-MgUser -UserId $NewValue
                 }
-                
+
                 # If there is no change to manager, do nothing. Otherwise, change the manager to the new value
                 if ( $newManager.UserPrincipalName -eq $oldValue) {
                     Write-Output "[INFO] $($UserObject.UserPrincipalName): No change to Manager"
@@ -256,14 +268,14 @@ function Update-Property {
                     }
                 }
             }
-            
+
         }
         { $_ -like "extensionAttribute[1-9]" -or $_ -like "extensionAttribute1[0-5]" } {
             # Handling for extensionAttribute1-extensionAttribute15
 
             # First, retrieve the current/old value
             $oldValue = $UserObject.OnPremisesExtensionAttributes.$Property
-            if (!$oldValue) { 
+            if (!$oldValue) {
                 $oldValue = "N/A"
             }
             # Compare the current value to the provided one
@@ -296,7 +308,7 @@ function Update-Property {
             # This portion of the switch is for all other generic properties that are set via Update-MgUser (ex: Department, JobTitle, etc.)
             # First, retrieve the current/old value
             $oldValue = $UserObject.$property
-            if (!$oldValue) { 
+            if (!$oldValue) {
                 $oldValue = "N/A"
             }
             # Compare the current value to the provided one
@@ -314,7 +326,27 @@ function Update-Property {
                     } else {
                         switch ( $DirectoryType ) {
                             "ActiveDirectory" {
-                                $UserObject | Set-ADUser @params                                
+                                if ( [string]::IsNullOrWhiteSpace($NewValue)) {
+                                    # If the new value is null, clear the property
+                                    try {
+                                        $UserObject | Set-ADUser -Clear $Property -ErrorAction Stop
+                                        Write-Output "[INFO] $($UserObject.UserPrincipalName): $Property updated from $oldValue -> (null)"
+                                    } catch {
+                                        $errorMessage = "[ERROR] $($UserObject.UserPrincipalName): Failed to clear $property. Error: $($_.Exception.Message)"
+                                        Write-Output $errorMessage
+                                        $errorLog.Add($errorMessage)
+                                    }
+                                } else {
+                                    # Otherwise, set the property to the new value
+                                    try {
+                                        $UserObject | Set-ADUser @params -ErrorAction Stop
+                                        Write-Output "[INFO] $($UserObject.UserPrincipalName): $Property updated from $oldValue -> $NewValue"
+                                    } catch {
+                                        $errorMessage = "[ERROR] $($UserObject.UserPrincipalName): Failed to update $property. Error: $($_.Exception.Message)"
+                                        Write-Output $errorMessage
+                                        $errorLog.Add($errorMessage)
+                                    }
+                                }
                             }
                             "EntraID" {
                                 Update-MgUser -UserId $UserObject.UserPrincipalName @params
@@ -381,16 +413,16 @@ function Start-PropertyUpdateWorkflow {
     # NOTE: The input file may reference an attribute like extensionAttribute1, but the property to pull those values is OnPremisesExtensionAttributes
 
     # This variable is used to track which properties need to be changed
-    $propsExclIdentifier = $csvUsers | Get-Member -MemberType NoteProperty | Where-Object { $_.Name -notLike $userIdentifier } | Select-Object -ExpandProperty Name 
+    $propsExclIdentifier = $csvUsers | Get-Member -MemberType NoteProperty | Where-Object { $_.Name -notlike $userIdentifier } | Select-Object -ExpandProperty Name
 
     # This variable is used to select the user and relevant properties
     # OnPremisesExtensionAttributes will always be selected for Entra ID users but extensionAttributes will not be referenced directly since
     # they are under OnPremisesExtensionAttributes
     $propsInclIdentifier = $csvUsers | Get-Member -MemberType NoteProperty | Select-Object -ExpandProperty Name
     if ( $propsInclIdentifier -contains "OnPremisesExtensionAttributes" ) {
-        $selectedProps = $propsInclIdentifier | Where-Object { $_ -notLike "extensionAttribute*" }
+        $selectedProps = $propsInclIdentifier | Where-Object { $_ -notlike "extensionAttribute*" }
     } else {
-        $selectedProps = $propsInclIdentifier | Where-Object { $_ -notLike "extensionAttribute*" } 
+        $selectedProps = $propsInclIdentifier | Where-Object { $_ -notlike "extensionAttribute*" }
         $selectedProps += "OnPremisesExtensionAttributes"
     }
 
@@ -407,7 +439,7 @@ function Start-PropertyUpdateWorkflow {
                 # Replace the default DN returned by Get-ADUser with the UPN of the manager, instead
                 if ( $userObj.Manager ) {
                     $userObj.Manager = Get-ADUser $userObj.Manager | Select-Object -ExpandProperty userprincipalname
-                 }
+                }
             }
             "EntraID" {
                 try {
@@ -422,7 +454,7 @@ function Start-PropertyUpdateWorkflow {
         if ($userObj) {
             $locatedUsers += $userId
         } else {
-            Write-Output "[WARNING] $($userId): SKIPPED, unable to find a user using provided the identifier"    
+            Write-Output "[WARNING] $($userId): SKIPPED, unable to find a user using provided the identifier"
             $skippedUsers.Add($userId)
         }
 
@@ -430,34 +462,33 @@ function Start-PropertyUpdateWorkflow {
         if (!($SkipBackup)) {
             # Store the properties of the users before proceeding
             $userProps = [ordered]@{}
-            foreach ($property in $userObj.psobject.properties) {                
+            foreach ($property in $userObj.psobject.properties) {
                 if ( $property.Value -is [System.String[]]) {
                     $userProps[$property.Name] = $property.Value -join ', '
                 } else {
-                    $userProps[$property.Name] = $property.Value                    
+                    $userProps[$property.Name] = $property.Value
                 }
             }
             $backup += New-Object PSObject -Property $userProps
         }
     }
-    if ( $backup ) {        
+    if ( $backup ) {
         $backup | Export-Csv $backupFile -NoTypeInformation
         Write-Output "[INFO] Exported user property backup to: $backupFile"
     }
-    # Iterate over the properties to update. Only overwrite user properties with blank values if $OverwriteBlankValue is used. Otherwise, only update properties that have values in the CSV
+    # Iterate over the properties to update. Only overwrite user properties with blank values if $OverwriteBlankValue is used
+    # Otherwise, only update properties that have values in the CSV
     foreach ($user in $csvUsers) {
         if ( $locatedUsers -contains $user.$UserIdentifier ) {
             # Locate user objects that were previously stored in $locatedUsers
-
             switch ( $DirectoryType ) {
                 "ActiveDirectory" {
-                    $userToUpdate = Get-ADUserByIdentifier -Identity $user.$UserIdentifier -UserIdentifier $UserIdentifier -Properties $propsInclIdentifier | Select-Object $selectedProps
+                    $userToUpdate = Get-ADUserByIdentifier -Identity $user.$UserIdentifier -UserIdentifier $UserIdentifier -Properties $propsInclIdentifier
                 }
                 "EntraID" {
                     $userToUpdate = Get-MgUser -UserId $user.$UserIdentifier -Property $selectedProps
                 }
             }
-            
             foreach ($property in $propsExclIdentifier) {
                 if ( $OverwriteBlankValue ) {
                     # Update property regardless of what is in the cell
@@ -469,7 +500,7 @@ function Start-PropertyUpdateWorkflow {
             }
         }
     }
-    
+
 }
 
 function Export-Results {
@@ -481,7 +512,7 @@ function Export-Results {
         $skippedUsers | Out-File $skippedUsersOutput
         Write-Output "[INFO] Some users were skipped, please review $skippedUsersOutput. Users may not have been matched with the specified UserIdentifier"
     }
-    if ( $errorLog ) { 
+    if ( $errorLog ) {
         $errorLog | Out-File $errorLogOutput
         Write-Output "[INFO] Error log exported to: $errorLogOutput"
     }
@@ -490,6 +521,9 @@ function Export-Results {
 ############ Variables #############
 
 # Report name/location
+if ( -not (Test-Path $ExportPath) ) {
+    New-Item -Path $ExportPath -ItemType Directory -Force | Out-Null
+}
 $resultsOutput = "$ExportPath\$($DirectoryType)_bulk_user_property_changes_$((Get-Date -Format 'yyyy-MM-dd_HHmm')).csv"
 $skippedUsersOutput = "$ExportPath\$($DirectoryType)_bulk_user_property_changes_skippedUsers_$((Get-Date -Format 'yyyy-MM-dd_HHmm')).txt"
 $errorLogOutput = "$ExportPath\$($DirectoryType)_bulk_user_property_changes_errors_$((Get-Date -Format 'yyyy-MM-dd_HHmm')).txt"
