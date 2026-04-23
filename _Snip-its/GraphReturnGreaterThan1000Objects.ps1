@@ -4,22 +4,26 @@
 # Example 1
 ########################
 
-$objectType = "users" # ex: "groups" "users" "devices"
-$uri = 'https://graph.microsoft.com/v1.0/' + $ObjectType + '?$top=999'
+$objectType = "users"  # "groups", "devices", etc.
+$uri = "https://graph.microsoft.com/v1.0/"
 
-$msGraphResponse = @()
+$graphResponse = [System.Collections.Generic.List[object]]::new()
 $nextLink = $null
 do {
-    $uri = if ($nextLink) {
+    $requestUri = if ($nextLink) {
         $nextLink
     } else {
-        $URI
+        $uri
     }
-    $response = Invoke-MgGraphRequest -Uri $uri -Method GET
-    $output = $response.Value
-    $msGraphResponse += $output
+    $response = Invoke-MgGraphRequest -Uri $requestUri -Method GET
+    if ($response.Value) {
+        $graphResponse.AddRange($response.Value)
+    }
     $nextLink = $response.'@odata.nextLink'
-} until (-not $nextLink )
+} until (-not $nextLink)
+
+# Optional: convert to array if needed
+#$msGraphResponse = $msGraphResponse.ToArray()
 
 ########################
 # Example 2
