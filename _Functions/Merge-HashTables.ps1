@@ -1,15 +1,15 @@
 function Merge-HashTables {
     <#
     .SYNOPSIS
-    Merge two hash tables into one. Creates a new hash table, copies First, then iterates through Second to add/replace values
+    Merge two hash tables into one.
 
-    .PARAMETER First
-    First hashtable input. Becomes the base hashtable in the merge
+    .DESCRIPTION
+    Creates a new hash table using $First as the base.
+    Values from $Second are added or overwrite existing ones.
+    Hashtable values are merged by keys.
+    Object values are merged by properties.
+    #>
 
-    .PARAMETER Second
-    Second hashtable input. Add or overwrite properties to the base hashtable from this hashtable
-    #> 
-    
     param (
         [Parameter(Mandatory = $true)]
         [hashtable]
@@ -17,40 +17,55 @@ function Merge-HashTables {
 
         [Parameter(Mandatory = $true)]
         [hashtable]
-        $Second  
+        $Second
     )
 
-    # Initialize an empty hashtable to store the merged result
-    $mergedHashTable = @{}
+    # Result hashtable
+    $merged = @{}
 
-    # Loop through each key in $First and add it to $mergedHashTable using PSObject.Copy() for deep copy
+    # Copy all entries from First (shallow copy of values)
     foreach ($key in $First.Keys) {
-        $mergedHashTable[$key] = $First[$key].PSObject.Copy()
+        $merged[$key] = $First[$key]
     }
 
-    # Loop through each key in $Second to merge it into $mergedHashTable
+    # Merge in Second
     foreach ($key in $Second.Keys) {
 
-        # Check if the key from $Second exists in the base hashtable
-        if ($mergedHashTable.ContainsKey($key)) {
-        
-            # Loop through each property in the object associated with the key in $Second.
-            foreach ($property in $Second[$key].PSObject.Properties) {
-            
-                # If any property from $Second does not exist in the matched base hashtable object, add it as a new property
-                if (-not $mergedHashTable[$key].PSObject.Properties[$property.Name]) {
-                    $mergedHashTable[$key] | Add-Member -MemberType NoteProperty -Name $property.Name -Value $property.Value -Force
+        # If key doesn't exist, just copy it
+        if (-not $merged.ContainsKey($key)) {
+            $merged[$key] = $Second[$key]
+            continue
+        }
+
+        $baseValue = $merged[$key]
+        $overlayValue = $Second[$key]
+
+        # Situation 1: Both values are hashtables: merge by keys
+        if ($baseValue -is [hashtable] -and $overlayValue -is [hashtable]) {
+            foreach ($subKey in $overlayValue.Keys) {
+                $baseValue[$subKey] = $overlayValue[$subKey]
+            }
+        }
+
+        # Situation 2: Both values are objects: merge by properties
+        elseif ($baseValue -is [psobject] -and $overlayValue -is [psobject]) {
+            foreach ($prop in $overlayValue.PSObject.Properties) {
+                if ($baseValue.PSObject.Properties[$prop.Name]) {
+                    $baseValue.PSObject.Properties[$prop.Name].Value = $prop.Value
                 } else {
-                    # If the property does exist in $mergedHashTable, overwrite the existing property value.
-                    $mergedHashTable[$key].PSObject.Properties[$property.Name].Value = $property.Value
+                    $baseValue | Add-Member `
+                        -MemberType NoteProperty `
+                        -Name $prop.Name `
+                        -Value $prop.Value
                 }
             }
-        } else {
-            # If the key from $Second does not exist in $mergedHashTable, add it as a new entry.
-            # Use PSObject.Copy() to ensure the object is deeply copied.
-            $mergedHashTable[$key] = $Second[$key].PSObject.Copy()
+        }
+
+        # Situation 3: Any other type = overwrite
+        else {
+            $merged[$key] = $overlayValue
         }
     }
-    return $mergedHashTable
-    
+
+    return $merged
 }
