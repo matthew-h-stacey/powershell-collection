@@ -4,9 +4,9 @@
 
 # 0) Gather initial information to be used in the script
 $AllMailboxes = Get-Mailbox -ResultSize Unlimited
-$AllDistributionGroups = Get-DistributionGroup -ResultSize Unlimited 
-$AllMailContacts = Get-MailContact -ResultSize Unlimited 
-$AllMailPublicFolders = Get-MailPublicFolder -ResultSize Unlimited 
+$AllDistributionGroups = Get-DistributionGroup -ResultSize Unlimited
+$AllMailContacts = Get-MailContact -ResultSize Unlimited
+$AllMailPublicFolders = Get-MailPublicFolder -ResultSize Unlimited
 
 # 1) Get all distribution groups
 $AllDistributionGroups | select Name,DisplayName,PrimarySmtpAddress,@{n='EmailAddresses';expression={$_.EmailAddresses}},@{n='ManagedBy';expression={$_.ManagedBy}},HiddenFromAddressListsEnabled,RequireSenderAuthenticationEnabled,MemberJoinRestriction,MemberDepartRestriction | Export-CSV C:\1DistributionGroups_Exchange.csv -NoTypeInformation
