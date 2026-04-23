@@ -10,21 +10,21 @@ function ConvertTo-HashTable {
         The identifier used to select entries from the hash table (ex: UserPrincipalName, Id, etc.)
 
         .EXAMPLE
-        ConvertTo-HashTable -List $listObjects -KeyName UserPrincipalName
+        ConvertTo-HashTable -Items $usersList -KeyName UserPrincipalName
         #>
         param (
             [Parameter(Mandatory = $true)]
             [System.Object]
-            $List,
+            $Items,
 
             [Parameter(Mandatory = $true)]
             [string]
             $KeyName
         )
-    
+
         $hashTable = @{}
-        if ( $List ) {
-            foreach ($item in $List) {
+        if ( $Items ) {
+            foreach ($item in $Items) {
                 if ( $item ) {
                     if ( $item.$KeyName ) {
                         $hashTable[$item.$KeyName] = $item
@@ -37,5 +37,5 @@ function ConvertTo-HashTable {
         } else {
             Write-Output "No input provided"
         }
-        
+
     }
